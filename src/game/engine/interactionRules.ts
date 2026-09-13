@@ -72,7 +72,7 @@ export function canDropOn(
   const card = getCard(pool, inst.cardId);
   if (!canDragFromBattle(state, seat, inst, card)) return false;
 
-  const targets = validAttackTargets(state, seat, inst, card, pool);
+  const targets = validAttackTargets(state, seat, inst, card);
   if (dropZone === 'oppShield') return targets.canAttackShield;
   if (dropZone === 'oppPlayer') return targets.canAttackDirect;
   if (dropZone.startsWith('oppCreature:')) {

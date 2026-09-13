@@ -119,8 +119,7 @@ export function validAttackTargets(
   state: GameState,
   seat: Seat,
   creature: CardInstance,
-  card: Card | undefined,
-  pool: Card[]
+  card: Card | undefined
 ): AttackTargets {
   const oppSeat: Seat = seat === 'p1' ? 'p2' : 'p1';
   const opponent = state.players[oppSeat];
