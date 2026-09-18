@@ -1,0 +1,29 @@
+{
+  "compilerOptions": {
+    "target": "ES2020",
+    "useDefineForClassFields": true,
+    "lib": ["ES2020", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "skipLibCheck": true,
+    "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "noEmit": true,
+    "jsx": "react-jsx",
+
+    // 型の不整合は確実に検出したいので strict は有効にしておく。
+    "strict": true,
+    "noFallthroughCasesInSwitch": true,
+
+    // noUnusedLocals / noUnusedParameters は意図的に無効にしている。
+    // 「使っていない変数がある」だけで公開が止まってしまい、
+    // 画面が真っ白になる原因になりやすいため。
+    // 動作に影響しない指摘でビルドを止めない方針。
+    "noUnusedLocals": false,
+    "noUnusedParameters": false,
+
+    "types": ["vite/client"]
+  },
+  "include": ["src"]
+}
