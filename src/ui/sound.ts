@@ -1,10 +1,8 @@
 /**
  * 効果音とBGM。
  *
- * 音声ファイルを一切使わず、Web Audio API で波形を合成して鳴らしている。
- * このため:
- *   - 既存作品の音源を使わずに済む
- *   - ファイルの読み込みが発生せず、動作が軽い
+ * 効果音は Web Audio API で波形を合成して鳴らしている(ファイル不要で軽い)。
+ * BGM は public/bgm/ に置いた音声ファイルを鳴らす。
  *
  * ミュート状態はモジュール内の変数で保持し、どこからでも playSE() を
  * 呼べるようにしている(状態を引数で引き回さなくてよい)。
@@ -139,89 +137,178 @@ export function playSE(name: SoundName): void {
   PRESETS[name]?.();
 }
 
+
 /* ===== BGM ===== */
 
 /**
- * BGMも合成で作る。
- * メニュー用は落ち着いた音、対戦中は少し緊張感のある音にしている。
+ * BGMは音声ファイル(public/bgm/*.mp3)を鳴らす。
+ *
+ * 曲を差し替えたいときは、public/bgm/ の中の同名ファイルを
+ * 置き換えるだけでよい(コードの変更は不要)。
+ *
+ *   menu.mp3   … ホーム画面
+ *   battle.mp3 … 対戦中
+ *   result.mp3 … 決着(勝敗が決まったあと)
+ *
+ * 【ブラウザの制限について】
+ * スマートフォンでは「利用者が一度画面に触れるまで音を鳴らせない」決まりが
+ * あるため、最初のタップまでは再生を保留し、unlockAudio() が呼ばれた時点で
+ * 鳴らし始める。
  */
-interface BgmPattern {
-  /** 0 は休符 */
-  notes: number[];
-  /** 1音あたりの長さ(秒) */
-  step: number;
-  type: OscillatorType;
-  volume: number;
-}
 
-const BGM_PATTERNS: Record<BgmMood, BgmPattern> = {
-  menu: {
-    notes: [
-      261.63, 0, 329.63, 0, 392.0, 349.23, 329.63, 0, 293.66, 0, 329.63, 0, 392.0,
-      440.0, 392.0, 0,
-    ],
-    step: 0.42,
-    type: 'sine',
-    volume: 0.05,
-  },
-  battle: {
-    notes: [
-      220, 220, 261.63, 220, 196, 196, 246.94, 220, 220, 220, 261.63, 293.66,
-      261.63, 220, 196, 220,
-    ],
-    step: 0.26,
-    type: 'triangle',
-    volume: 0.06,
-  },
+export type BgmMood = 'menu' | 'battle' | 'result';
+
+/**
+ * import.meta.env.BASE_URL には公開先のパス(/duel-craft/)が入る。
+ * これを付けないとGitHub Pagesで音声が見つからない。
+ */
+const BGM_SRC: Record<BgmMood, string> = {
+  menu: `${import.meta.env.BASE_URL}bgm/menu.mp3`,
+  battle: `${import.meta.env.BASE_URL}bgm/battle.mp3`,
+  result: `${import.meta.env.BASE_URL}bgm/result.mp3`,
 };
 
-export type BgmMood = 'menu' | 'battle';
+/** 曲ごとの音量(0〜1)。効果音を邪魔しない程度に抑える。 */
+const BGM_GAIN: Record<BgmMood, number> = {
+  menu: 0.45,
+  battle: 0.4,
+  result: 0.5,
+};
 
-let bgmTimer: ReturnType<typeof setInterval> | null = null;
+/** 曲を切り替えるときのフェード時間(ミリ秒) */
+const FADE_MS = 700;
+
+const players = new Map<BgmMood, HTMLAudioElement>();
+const fadeTimers = new Map<BgmMood, ReturnType<typeof setInterval>>();
+
 let bgmMuted = false;
-let bgmMood: BgmMood | null = null;
+let currentMood: BgmMood | null = null;
+/** まだ音を鳴らせない間、鳴らしたい曲を覚えておく */
+let pendingMood: BgmMood | null = null;
+let audioUnlocked = false;
+
+function getPlayer(mood: BgmMood): HTMLAudioElement | null {
+  if (typeof Audio === 'undefined') return null;
+  let el = players.get(mood);
+  if (!el) {
+    el = new Audio(BGM_SRC[mood]);
+    el.loop = true;
+    el.preload = 'none';
+    el.volume = 0;
+    // 音量を下げても消えないように、再生位置は保持する
+    players.set(mood, el);
+  }
+  return el;
+}
+
+/** 音量を目標値までなめらかに変える。0にしたときは停止する。 */
+function fadeTo(mood: BgmMood, target: number, onDone?: () => void): void {
+  const el = players.get(mood);
+  if (!el) return;
+
+  const existing = fadeTimers.get(mood);
+  if (existing) clearInterval(existing);
+
+  const stepMs = 50;
+  const steps = Math.max(1, Math.round(FADE_MS / stepMs));
+  const delta = (target - el.volume) / steps;
+  let count = 0;
+
+  const timer = setInterval(() => {
+    count++;
+    const next = el.volume + delta;
+    el.volume = Math.min(1, Math.max(0, next));
+    if (count >= steps) {
+      el.volume = Math.min(1, Math.max(0, target));
+      clearInterval(timer);
+      fadeTimers.delete(mood);
+      onDone?.();
+    }
+  }, stepMs);
+
+  fadeTimers.set(mood, timer);
+}
+
+/** 実際に切り替える(音が鳴らせる状態になってから呼ぶ) */
+function switchTo(mood: BgmMood): void {
+  const previous = currentMood;
+  currentMood = mood;
+  pendingMood = null;
+
+  if (previous && previous !== mood) {
+    fadeTo(previous, 0, () => {
+      const old = players.get(previous);
+      if (old && currentMood !== previous) {
+        old.pause();
+        old.currentTime = 0;
+      }
+    });
+  }
+
+  const el = getPlayer(mood);
+  if (!el) return;
+
+  el.preload = 'auto';
+  if (bgmMuted) {
+    el.volume = 0;
+    return;
+  }
+
+  // 再生開始は失敗することがある(未操作など)ので、必ず握りつぶす
+  const started = el.play();
+  if (started && typeof started.catch === 'function') {
+    started.catch(() => {
+      // 鳴らせなかった場合は、次のタップでもう一度試す
+      pendingMood = mood;
+      audioUnlocked = false;
+    });
+  }
+  fadeTo(mood, BGM_GAIN[mood]);
+}
+
+/**
+ * BGMを開始する。同じ曲が既に鳴っていれば何もしない。
+ * まだ画面に触れられていない場合は、最初のタップまで待つ。
+ */
+export function startBgm(mood: BgmMood): void {
+  if (currentMood === mood && !pendingMood) return;
+  if (!audioUnlocked) {
+    pendingMood = mood;
+    return;
+  }
+  switchTo(mood);
+}
+
+export function stopBgm(): void {
+  pendingMood = null;
+  if (currentMood) {
+    const mood = currentMood;
+    currentMood = null;
+    fadeTo(mood, 0, () => {
+      const el = players.get(mood);
+      if (el) {
+        el.pause();
+        el.currentTime = 0;
+      }
+    });
+  }
+}
 
 export function setBgmMuted(muted: boolean): void {
   bgmMuted = muted;
+  if (!currentMood) return;
+
+  if (muted) {
+    fadeTo(currentMood, 0);
+  } else {
+    const el = getPlayer(currentMood);
+    if (el) void el.play()?.catch(() => undefined);
+    fadeTo(currentMood, BGM_GAIN[currentMood]);
+  }
 }
 
 export function isBgmMuted(): boolean {
   return bgmMuted;
-}
-
-export function stopBgm(): void {
-  if (bgmTimer) {
-    clearInterval(bgmTimer);
-    bgmTimer = null;
-  }
-  bgmMood = null;
-}
-
-/** BGMを開始する。同じ曲調が既に鳴っていれば何もしない。 */
-export function startBgm(mood: BgmMood): void {
-  if (bgmMood === mood && bgmTimer) return;
-  stopBgm();
-  bgmMood = mood;
-
-  const pattern = BGM_PATTERNS[mood];
-  let index = 0;
-
-  const playStep = () => {
-    if (bgmMuted) return;
-    const freq = pattern.notes[index % pattern.notes.length];
-    if (freq > 0) {
-      beep({
-        freq,
-        duration: pattern.step * 0.9,
-        type: pattern.type,
-        volume: pattern.volume,
-      });
-    }
-    index++;
-  };
-
-  playStep();
-  bgmTimer = setInterval(playStep, pattern.step * 1000);
 }
 
 /**
@@ -231,4 +318,16 @@ export function startBgm(mood: BgmMood): void {
 export function unlockAudio(): void {
   const ctx = getAudioCtx();
   if (ctx?.state === 'suspended') void ctx.resume();
+
+  audioUnlocked = true;
+
+  const want = pendingMood ?? currentMood;
+  if (want) {
+    // 保留していた曲、または止まってしまった曲を鳴らし直す
+    const el = players.get(want);
+    if (!el || el.paused || want !== currentMood) {
+      currentMood = null;
+      switchTo(want);
+    }
+  }
 }

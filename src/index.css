@@ -2,7 +2,6 @@
 @tailwind components;
 @tailwind utilities;
 
-/* 横画面専用のため、縦スクロールを止めて画面内に収める */
 html,
 body,
 #root {
@@ -11,13 +10,81 @@ body,
   overflow: hidden;
   background-color: #0b1020;
   -webkit-font-smoothing: antialiased;
+  /* タップしたときに出る灰色の四角を消す */
   -webkit-tap-highlight-color: transparent;
 }
 
 body {
   font-family: 'Hiragino Sans', 'Noto Sans JP', system-ui, sans-serif;
-  /* カードの誤選択を防ぐ */
+  /* カードの誤選択を防ぐ(iOSは -webkit- 付きが必要) */
+  -webkit-user-select: none;
   user-select: none;
+  /* iOSで長押しした時に「コピー/共有」メニューが出るのを止める。
+     これが出ると長押し操作が途中で打ち切られてしまう。 */
+  -webkit-touch-callout: none;
+  /* タップしてから反応するまでの遅延(300ms)をなくす */
+  touch-action: manipulation;
+  /* 画面の端で引っ張った時の跳ね返りを止める */
+  overscroll-behavior: none;
+}
+
+/**
+ * 対戦画面の外枠。
+ *
+ * ・100svh … iOSのSafariは下部にツールバーが重なるため、100vh だと
+ *   画面下(手札・操作ボタン)がツールバーの下に隠れてタップできなくなる。
+ *   svh は「ツールバーが出ている状態の高さ」なので、必ず全部見える。
+ * ・env(safe-area-inset-*) … iPhoneのノッチ(黒い出っ張り)やホームバーを避ける。
+ * ・touch-action: none … 指で操作した時にブラウザ側のスクロール判定が
+ *   割り込んで、タップ・長押し・ドラッグが取り消されるのを防ぐ。
+ */
+.dc-battle-root {
+  position: relative;
+  overflow: hidden;
+  height: 100vh;
+  height: 100dvh;
+  height: 100svh;
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  padding-left: env(safe-area-inset-left, 0px);
+  padding-right: env(safe-area-inset-right, 0px);
+  box-sizing: border-box;
+  touch-action: none;
+  overscroll-behavior: none;
+}
+
+/** ホーム画面は縦に読むので、スクロールできるようにしておく */
+.dc-page-root {
+  height: 100vh;
+  height: 100dvh;
+  height: 100svh;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding-top: calc(env(safe-area-inset-top, 0px) + 20px);
+  padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 28px);
+  padding-left: calc(env(safe-area-inset-left, 0px) + 20px);
+  padding-right: calc(env(safe-area-inset-right, 0px) + 20px);
+  box-sizing: border-box;
+}
+
+/** iOSで押しても反応しない事故を防ぐため、押せるものは必ずこの指定を通す */
+button,
+.dc-pressable {
+  touch-action: manipulation;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+
+/**
+ * タップ・長押し・ドラッグを自前で判定している場所(カード・ゾーン)。
+ * ブラウザにスクロールやズームとして横取りされないよう、完全に止める。
+ */
+.dc-press-area {
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
 }
 
 /* 端末の設定で動きを減らしている場合は、アニメーションを止める */

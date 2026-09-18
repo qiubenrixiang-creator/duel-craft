@@ -33,15 +33,26 @@ export default function App() {
 
   const decks = useMemo(() => loadDecks(), []);
 
-  /** 最初の操作で音を有効にする(ブラウザの制限への対応) */
+  /**
+   * 最初の操作で音を有効にする(ブラウザの制限への対応)。
+   *
+   * iPhoneでは一度の解除に失敗することがあるため、
+   * 音が鳴り始めるまで何度でも試せるように、解除処理は外さずに残しておく。
+   */
   useEffect(() => {
+    startBgm('menu');
+
     const unlock = () => {
       unlockAudio();
-      startBgm('menu');
-      window.removeEventListener('pointerdown', unlock);
     };
     window.addEventListener('pointerdown', unlock);
-    return () => window.removeEventListener('pointerdown', unlock);
+    window.addEventListener('touchend', unlock);
+    window.addEventListener('keydown', unlock);
+    return () => {
+      window.removeEventListener('pointerdown', unlock);
+      window.removeEventListener('touchend', unlock);
+      window.removeEventListener('keydown', unlock);
+    };
   }, []);
 
   const startTestBattle = useCallback(() => {
@@ -75,12 +86,10 @@ export default function App() {
 
   return (
     <div
+      className="dc-page-root"
       style={{
-        height: '100%',
-        overflow: 'auto',
         background: 'linear-gradient(180deg,#0B1020,#16233B)',
         color: INK.base,
-        padding: 24,
       }}
     >
       <div style={{ maxWidth: 720, margin: '0 auto' }}>

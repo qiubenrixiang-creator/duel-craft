@@ -254,7 +254,10 @@ export function GameLog({ log, onClose }: GameLogProps) {
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        padding: 20,
+        // ノッチやホームバーに重ならないようにする
+        padding:
+          'max(12px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right))' +
+          ' max(12px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left))',
         background: 'rgba(8,14,28,0.72)',
         backdropFilter: 'blur(4px)',
       }}
@@ -264,7 +267,7 @@ export function GameLog({ log, onClose }: GameLogProps) {
         style={{
           width: '100%',
           maxWidth: 560,
-          maxHeight: '80vh',
+          maxHeight: '80svh',
           overflowY: 'auto',
           background: GLASS.panel,
           backdropFilter: GLASS.blur,

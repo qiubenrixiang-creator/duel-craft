@@ -41,7 +41,10 @@ export function Modal({ onClose, children, maxWidth = 520 }: ModalProps) {
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        padding: 20,
+        // ノッチやホームバーに重ならないようにする
+        padding:
+          'max(12px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right))' +
+          ' max(12px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left))',
         background: 'rgba(8,14,28,0.72)',
         backdropFilter: 'blur(4px)',
       }}
@@ -51,7 +54,7 @@ export function Modal({ onClose, children, maxWidth = 520 }: ModalProps) {
         style={{
           width: '100%',
           maxWidth,
-          maxHeight: '86vh',
+          maxHeight: '86svh',
           overflowY: 'auto',
           background: GLASS.panel,
           backdropFilter: GLASS.blur,

@@ -25,6 +25,11 @@ export interface PressHandlers {
   onPointerCancel: (e: React.PointerEvent) => void;
   /** 長押しでブラウザ標準のメニューが出ないようにする */
   onContextMenu: (e: React.MouseEvent) => void;
+  /**
+   * touch-action: none などをまとめて当てるためのクラス。
+   * これが無いと、iOSではスクロール判定に操作を奪われてタップが効かない。
+   */
+  className: string;
 }
 
 export interface UsePressOptions {
@@ -52,6 +57,11 @@ export function usePress(options: UsePressOptions): PressHandlers {
   const startRef = useRef<{ x: number; y: number } | null>(null);
   const draggingRef = useRef(false);
   const longPressedRef = useRef(false);
+  /** 押し始めた時刻。取り消された時にタップだったか判断するのに使う。 */
+  const startTimeRef = useRef(0);
+  const movedRef = useRef(0);
+  /** 最後に指があった位置(操作が打ち切られた時の着地点に使う) */
+  const lastRef = useRef<{ x: number; y: number } | null>(null);
 
   const clearTimer = useCallback(() => {
     if (timerRef.current) {
@@ -63,10 +73,18 @@ export function usePress(options: UsePressOptions): PressHandlers {
   const handleDown = useCallback(
     (e: React.PointerEvent) => {
       if (disabled) return;
-      // 指を離すまでこの要素がイベントを受け取り続けるようにする
-      (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
+      // 指を離すまでこの要素がイベントを受け取り続けるようにする。
+      // 一部の環境では失敗することがあるため、失敗しても処理を続ける。
+      try {
+        (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
+      } catch {
+        /* 捕捉できなくてもタップ判定自体はできる */
+      }
 
       startRef.current = { x: e.clientX, y: e.clientY };
+      lastRef.current = { x: e.clientX, y: e.clientY };
+      startTimeRef.current = Date.now();
+      movedRef.current = 0;
       draggingRef.current = false;
       longPressedRef.current = false;
 
@@ -91,6 +109,8 @@ export function usePress(options: UsePressOptions): PressHandlers {
       const dx = e.clientX - startRef.current.x;
       const dy = e.clientY - startRef.current.y;
       const moved = Math.hypot(dx, dy);
+      movedRef.current = Math.max(movedRef.current, moved);
+      lastRef.current = { x: e.clientX, y: e.clientY };
 
       if (!draggingRef.current && moved > DRAG_THRESHOLD) {
         // 動かし始めたので長押しは取り消す
@@ -121,18 +141,43 @@ export function usePress(options: UsePressOptions): PressHandlers {
       }
 
       startRef.current = null;
+      lastRef.current = null;
+      movedRef.current = 0;
       draggingRef.current = false;
       longPressedRef.current = false;
     },
     [disabled, onTap, onDragEnd, clearTimer]
   );
 
+  /**
+   * ブラウザ側の都合で操作が打ち切られた時(pointercancel)。
+   *
+   * iOSのSafariは、指の動きをスクロールだと判断すると、こちらの操作を
+   * 途中で取り消してしまう。そのまま捨てるとタップが効かなくなるため、
+   * 「短く・ほとんど動かさずに」押されていた場合はタップとして扱う。
+   */
   const handleCancel = useCallback(() => {
     clearTimer();
+
+    const wasQuickTap =
+      startRef.current !== null &&
+      !draggingRef.current &&
+      !longPressedRef.current &&
+      movedRef.current <= DRAG_THRESHOLD &&
+      Date.now() - startTimeRef.current < LONG_PRESS_MS;
+
+    if (draggingRef.current) {
+      onDragEnd?.(lastRef.current ?? { x: 0, y: 0 });
+    } else if (wasQuickTap && !disabled) {
+      onTap?.();
+    }
+
     startRef.current = null;
+    lastRef.current = null;
+    movedRef.current = 0;
     draggingRef.current = false;
     longPressedRef.current = false;
-  }, [clearTimer]);
+  }, [clearTimer, disabled, onTap, onDragEnd]);
 
   return {
     onPointerDown: handleDown,
@@ -140,5 +185,6 @@ export function usePress(options: UsePressOptions): PressHandlers {
     onPointerUp: handleUp,
     onPointerCancel: handleCancel,
     onContextMenu: (e) => e.preventDefault(),
+    className: 'dc-press-area',
   };
 }

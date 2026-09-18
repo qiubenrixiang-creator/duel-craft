@@ -12,7 +12,7 @@
  * 確認を挟むのは、誤って攻撃したりマナに置いたりする事故を防ぐため。
  */
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { Card, CardInstance } from '../types/card';
 import type { GameState, Seat } from '../types/game';
 import type { DropZoneId, FieldId, PendingAction } from '../types/ui';
@@ -68,21 +68,57 @@ export function BattleScreen({
   const opponent = state.players[oppSeat];
 
   /* ===== 画面サイズに応じた拡大率 ===== */
+
+  /**
+   * window.innerHeight は、iOSのSafariでは画面下のツールバーに隠れる分まで
+   * 含んだ値を返すため、当てにできない。
+   * 実際に描画されている枠(rootRef)の大きさを測って使う。
+   */
+  const rootRef = useRef<HTMLDivElement | null>(null);
   const [viewport, setViewport] = useState({
     w: typeof window !== 'undefined' ? window.innerWidth : 1920,
     h: typeof window !== 'undefined' ? window.innerHeight : 1080,
   });
 
   useEffect(() => {
-    const onResize = () =>
-      setViewport({ w: window.innerWidth, h: window.innerHeight });
-    window.addEventListener('resize', onResize);
-    window.addEventListener('orientationchange', onResize);
-    return () => {
-      window.removeEventListener('resize', onResize);
-      window.removeEventListener('orientationchange', onResize);
+    const measure = () => {
+      const el = rootRef.current;
+      const next =
+        el && el.clientWidth > 0 && el.clientHeight > 0
+          ? { w: el.clientWidth, h: el.clientHeight }
+          : {
+              w: window.visualViewport?.width ?? window.innerWidth,
+              h: window.visualViewport?.height ?? window.innerHeight,
+            };
+
+      // 同じ値なら描き直さない(iOSは resize が頻繁に飛んでくるため)
+      setViewport((prev) =>
+        prev.w === next.w && prev.h === next.h ? prev : next
+      );
     };
-  }, []);
+
+    measure();
+
+    const observer =
+      typeof ResizeObserver !== 'undefined' ? new ResizeObserver(measure) : null;
+    if (observer && rootRef.current) observer.observe(rootRef.current);
+
+    window.addEventListener('resize', measure);
+    window.addEventListener('orientationchange', measure);
+    window.visualViewport?.addEventListener('resize', measure);
+    // 回転直後は寸法が確定していないことがあるので、少し待ってもう一度測る
+    const retry = setTimeout(measure, 350);
+
+    return () => {
+      observer?.disconnect();
+      window.removeEventListener('resize', measure);
+      window.removeEventListener('orientationchange', measure);
+      window.visualViewport?.removeEventListener('resize', measure);
+      clearTimeout(retry);
+    };
+    // 縦横が切り替わると枠そのものが差し替わるので、測り直しの対象も付け直す
+    // (isPortrait はこの下で定義されるため、同じ条件をここで書いている)
+  }, [viewport.h > viewport.w]);
 
   const scale = computeScale(viewport.w, viewport.h);
   const isPortrait = viewport.h > viewport.w;
@@ -103,9 +139,14 @@ export function BattleScreen({
 
   /** 対戦中はBGMを切り替える */
   useEffect(() => {
-    unlockAudio();
     startBgm('battle');
+    unlockAudio();
   }, []);
+
+  /** 勝敗が決まったら結果のBGMに切り替える */
+  useEffect(() => {
+    if (state.winner) startBgm('result');
+  }, [state.winner]);
 
   const getCard = useCallback(
     (cardId: string) => lookupCard(pool, cardId),
@@ -422,14 +463,23 @@ export function BattleScreen({
     [state, seat, pool, onStateChange]
   );
 
-  /* ===== 縦持ちの案内 ===== */
+  /* ===== 描画 ===== */
 
+  const zoneGrid = {
+    display: 'grid',
+    gridTemplateColumns: `${170 * scale}px 1fr ${430 * scale}px ${260 * scale}px`,
+    gap: 14 * scale,
+    minHeight: 0,
+  } as const;
+
+  // 縦持ちのときは案内だけを出す。
+  // 外枠(rootRef)は常に描いておき、回転しても寸法を測り続けられるようにする。
   if (isPortrait) {
     return (
       <div
+        ref={rootRef}
+        className="dc-battle-root"
         style={{
-          position: 'fixed',
-          inset: 0,
           background: '#0B1020',
           color: INK.base,
           display: 'flex',
@@ -437,7 +487,6 @@ export function BattleScreen({
           alignItems: 'center',
           justifyContent: 'center',
           gap: 16,
-          padding: 32,
           textAlign: 'center',
         }}
       >
@@ -457,17 +506,8 @@ export function BattleScreen({
     );
   }
 
-  /* ===== 描画 ===== */
-
-  const zoneGrid = {
-    display: 'grid',
-    gridTemplateColumns: `${170 * scale}px 1fr ${430 * scale}px ${260 * scale}px`,
-    gap: 14 * scale,
-    minHeight: 0,
-  } as const;
-
   return (
-    <div style={{ position: 'relative', height: '100vh', overflow: 'hidden' }}>
+    <div ref={rootRef} className="dc-battle-root">
       <BackgroundField fieldId={fieldId} disabled={backgroundOff} />
       <WeatherEffect fieldId={fieldId} disabled={backgroundOff} />
 
@@ -475,7 +515,7 @@ export function BattleScreen({
         style={{
           position: 'relative',
           zIndex: 2,
-          height: '100vh',
+          height: '100%',
           display: 'flex',
           flexDirection: 'column',
           padding: `0 ${40 * scale}px`,
@@ -682,50 +722,58 @@ export function BattleScreen({
             )}
           </div>
         </div>
-      </div>
 
-      {/* ===== 操作ボタン(右下に固定) ===== */}
-      <div
-        style={{
-          position: 'fixed',
-          right: 40 * scale,
-          bottom: 14 * scale,
-          zIndex: 20,
-        }}
-      >
-        <ActionButtons
-          scale={scale}
-          phase={state.phase}
-          enabled={canOperate}
-          canCancel={Boolean(selectedInstId || pendingAction)}
-          onCancel={cancelAction}
-          onToMain={() => requestAction({ type: 'toMainPhase' })}
-          onToAttack={() => requestAction({ type: 'toAttackPhase' })}
-          onEndTurn={() => requestAction({ type: 'endTurn' })}
-        />
-      </div>
+        {/*
+          操作ボタンと退出ボタンは、外枠ではなくこの中に置く。
+          外枠にはノッチを避けるための余白が付いているため、
+          ここに置かないとボタンがノッチの下に入って押せなくなる。
+        */}
 
-      {/* 退出 */}
-      <button
-        onClick={onExit}
-        style={{
-          position: 'fixed',
-          top: 12,
-          left: 12,
-          zIndex: 20,
-          padding: '8px 14px',
-          borderRadius: 999,
-          border: `1px solid ${GLASS.edge}`,
-          background: GLASS.panel,
-          backdropFilter: GLASS.blur,
-          color: INK.base,
-          fontSize: 12,
-          cursor: 'pointer',
-          fontFamily: 'inherit',
-        }}
-      >
-        ← 対戦をやめる
-      </button>
+        {/* ===== 操作ボタン(右下) ===== */}
+        <div
+          style={{
+            position: 'absolute',
+            right: 40 * scale,
+            bottom: 14 * scale,
+            zIndex: 20,
+          }}
+        >
+          <ActionButtons
+            scale={scale}
+            phase={state.phase}
+            enabled={canOperate}
+            canCancel={Boolean(selectedInstId || pendingAction)}
+            onCancel={cancelAction}
+            onToMain={() => requestAction({ type: 'toMainPhase' })}
+            onToAttack={() => requestAction({ type: 'toAttackPhase' })}
+            onEndTurn={() => requestAction({ type: 'endTurn' })}
+          />
+        </div>
+
+        {/* 退出 */}
+        <button
+          onClick={onExit}
+          style={{
+            position: 'absolute',
+            top: 10 * scale,
+            left: 40 * scale,
+            zIndex: 20,
+            // 指で押しやすい大きさを確保する
+            minHeight: 34,
+            padding: '8px 14px',
+            borderRadius: 999,
+            border: `1px solid ${GLASS.edge}`,
+            background: GLASS.panel,
+            backdropFilter: GLASS.blur,
+            color: INK.base,
+            fontSize: 12,
+            cursor: 'pointer',
+            fontFamily: 'inherit',
+          }}
+        >
+          ← 対戦をやめる
+        </button>
+      </div>
 
       {/* ===== ドラッグ中のカード ===== */}
       {dragInstId && dragPoint && (
