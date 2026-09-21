@@ -56,6 +56,14 @@ export interface CardViewProps {
   onDragMove?: (p: { x: number; y: number }) => void;
   onDragEnd?: (p: { x: number; y: number }) => void;
   disabled?: boolean;
+  /**
+   * 一覧など、縦にスクロールする画面で使う指定。
+   *
+   * 対戦中のカードはドラッグで運ぶため指の動きを全部横取りしているが、
+   * 一覧でそれをやるとカードの上から指を滑らせた時にスクロールできなくなる。
+   * この指定をすると、タップだけを拾い、スクロールはブラウザに任せる。
+   */
+  allowScroll?: boolean;
 }
 
 export function CardView({
@@ -74,6 +82,7 @@ export function CardView({
   onDragMove,
   onDragEnd,
   disabled = false,
+  allowScroll = false,
 }: CardViewProps) {
   const press = usePress({
     onTap,
@@ -155,9 +164,17 @@ export function CardView({
   const rarityColor = card.rarity ? RARITY_COLOR[card.rarity] : null;
   const civEdge = CIV_COLOR[primary];
 
+  /**
+   * スクロールする画面では、指の動きを横取りせずタップだけを拾う。
+   * それ以外(対戦画面)は usePress にすべて任せる。
+   */
+  const interaction = allowScroll
+    ? { onClick: onTap, className: 'dc-pressable' }
+    : press;
+
   return (
     <div
-      {...press}
+      {...interaction}
       style={{
         width: dims.w,
         height: dims.h,
@@ -182,7 +199,7 @@ export function CardView({
           .join(' '),
         opacity: dragging ? 0.5 : dimmed ? 0.5 : 1,
         transition: `transform ${DURATION.select}ms ${EASING}, box-shadow ${DURATION.select}ms ${EASING}, opacity ${DURATION.tap}ms ${EASING}`,
-        touchAction: 'none',
+        touchAction: allowScroll ? 'manipulation' : 'none',
       }}
     >
       {/* 文明帯(左端)。多色は上下に分けて表示する。 */}

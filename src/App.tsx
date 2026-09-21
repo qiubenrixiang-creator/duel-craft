@@ -1,6 +1,8 @@
 /**
- * アプリの入口。画面の切り替えを担当する。
- * 現時点では、対戦画面の動作を確かめられる状態にしてある。
+ * アプリの入口。画面の切り替えと、カードの保存を担当する。
+ *
+ * カードはこの階層で1つだけ持ち、各画面には渡すだけにしている。
+ * こうすることで「作ったカードが対戦に出てこない」といった食い違いが起きない。
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
@@ -9,15 +11,23 @@ import type { GameState } from './types/game';
 import type { FieldId } from './types/ui';
 
 import { BattleScreen } from './screens/BattleScreen';
+import { CardEditorScreen } from './screens/CardEditorScreen';
+import { CardListScreen } from './screens/CardListScreen';
 import { createGame } from './game/engine/gameEngine';
 import { isFirebaseConfigured } from './network/firebase';
-import { loadCards, loadDecks, loadPlayerName, savePlayerName } from './network/localStore';
+import {
+  loadCards,
+  loadDecks,
+  loadPlayerName,
+  saveCards,
+  savePlayerName,
+} from './network/localStore';
 import { SAMPLE_CARDS } from './cards/sampleCards';
 import { randomFieldId } from './ui/fields';
 import { ACCENT, GLASS, INK, NEON, VOID, clipDiagonal } from './ui/tokens';
 import { startBgm, unlockAudio } from './ui/sound';
 
-type Screen = 'home' | 'battle';
+type Screen = 'home' | 'battle' | 'cards' | 'cardEdit';
 
 export default function App() {
   const [screen, setScreen] = useState<Screen>('home');
@@ -25,13 +35,67 @@ export default function App() {
   const [fieldId, setFieldId] = useState<FieldId>('plain');
   const [playerName, setPlayerName] = useState(loadPlayerName() || 'あなた');
 
-  // 作成済みカード。まだ1枚も無ければサンプルを使う。
-  const pool: Card[] = useMemo(() => {
-    const saved = loadCards();
-    return saved.length > 0 ? saved : SAMPLE_CARDS;
-  }, []);
+  /** 自分で作ったカード。保存の実体はこの端末の中にある。 */
+  const [myCards, setMyCards] = useState<Card[]>(() => loadCards());
+  /** 編集中のカード。新規作成のときは undefined。 */
+  const [editingCard, setEditingCard] = useState<Card | undefined>(undefined);
+  /** 保存に失敗したときの案内文 */
+  const [storageError, setStorageError] = useState<string | null>(null);
+
+  // 対戦で使うカード。まだ1枚も作っていなければサンプルで遊べるようにする。
+  const pool: Card[] = useMemo(
+    () => (myCards.length > 0 ? myCards : SAMPLE_CARDS),
+    [myCards]
+  );
 
   const decks = useMemo(() => loadDecks(), []);
+
+  /**
+   * カードを保存する。
+   *
+   * 画像をこの端末の中に持つため、増えすぎると保存できなくなることがある。
+   * 失敗したときは黙って消えないよう、必ず画面に出す。
+   */
+  const persistCards = useCallback((next: Card[]) => {
+    setMyCards(next);
+    if (saveCards(next)) {
+      setStorageError(null);
+      return true;
+    }
+    setStorageError(
+      'カードを保存できませんでした。端末の空き容量が足りていない可能性があります。' +
+        'イラスト付きのカードを減らすと保存できることがあります。'
+    );
+    return false;
+  }, []);
+
+  const handleSaveCard = useCallback(
+    (card: Card) => {
+      const exists = myCards.some((c) => c.id === card.id);
+      persistCards(
+        exists ? myCards.map((c) => (c.id === card.id ? card : c)) : [...myCards, card]
+      );
+      setEditingCard(undefined);
+      setScreen('cards');
+    },
+    [myCards, persistCards]
+  );
+
+  /** 複製する。サンプルを下敷きに自分のカードを作るときにも使う。 */
+  const handleDuplicateCard = useCallback((card: Card) => {
+    setEditingCard({
+      ...card,
+      id: `card_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+      name: `${card.name} のコピー`,
+      builtin: undefined,
+    });
+    setScreen('cardEdit');
+  }, []);
+
+  const handleDeleteCard = useCallback(
+    (card: Card) => persistCards(myCards.filter((c) => c.id !== card.id)),
+    [myCards, persistCards]
+  );
 
   /**
    * 最初の操作で音を有効にする(ブラウザの制限への対応)。
@@ -66,6 +130,41 @@ export default function App() {
     setScreen('battle');
     savePlayerName(playerName);
   }, [decks, pool, playerName]);
+
+  if (screen === 'cardEdit') {
+    return (
+      <CardEditorScreen
+        editing={editingCard}
+        existing={myCards}
+        onSave={handleSaveCard}
+        onCancel={() => {
+          setEditingCard(undefined);
+          setScreen('cards');
+        }}
+      />
+    );
+  }
+
+  if (screen === 'cards') {
+    return (
+      <CardListScreen
+        cards={myCards}
+        samples={SAMPLE_CARDS}
+        storageError={storageError}
+        onCreate={() => {
+          setEditingCard(undefined);
+          setScreen('cardEdit');
+        }}
+        onEdit={(card) => {
+          setEditingCard(card);
+          setScreen('cardEdit');
+        }}
+        onDuplicate={handleDuplicateCard}
+        onDelete={handleDeleteCard}
+        onBack={() => setScreen('home')}
+      />
+    );
+  }
 
   if (screen === 'battle' && game) {
     return (
@@ -127,11 +226,30 @@ export default function App() {
         </header>
 
         <section style={panelStyle}>
+          <h2 style={h2Style}>カードを作る</h2>
+          <p style={{ fontSize: 13, color: INK.dim, lineHeight: 1.7 }}>
+            名前・文明・コスト・パワー・効果を決めて、自分だけのカードを作れます。
+            作ったカードはこの端末に保存され、そのまま対戦で使えます。
+          </p>
+          <button onClick={() => setScreen('cards')} style={buttonStyle}>
+            カード一覧をひらく
+          </button>
+          <div style={{ marginTop: 10 }}>
+            <Row
+              label="作成済みカード"
+              value={myCards.length > 0 ? `${myCards.length} 枚` : 'まだありません'}
+            />
+          </div>
+        </section>
+
+        <section style={panelStyle}>
           <h2 style={h2Style}>対戦を試す</h2>
           <p style={{ fontSize: 13, color: INK.dim, lineHeight: 1.7 }}>
             対戦画面の動作を確認できます。横画面でお試しください。
             {decks.length === 0 &&
-              'まだデッキが保存されていないため、サンプルカードで40枚のデッキを自動生成します。'}
+              (myCards.length > 0
+                ? 'まだデッキが保存されていないため、作成済みカードから40枚のデッキを自動生成します。'
+                : 'まだカードもデッキも無いため、サンプルカードで40枚のデッキを自動生成します。')}
           </p>
 
           <label style={{ display: 'block', marginTop: 14 }}>
@@ -177,7 +295,7 @@ export default function App() {
 
         <section style={panelStyle}>
           <h2 style={h2Style}>状態</h2>
-          <Row label="作成済みカード" value={`${loadCards().length} 枚`} />
+          <Row label="作成済みカード" value={`${myCards.length} 枚`} />
           <Row label="保存されたデッキ" value={`${decks.length} 個`} />
           <Row
             label="オンライン対戦"

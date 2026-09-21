@@ -12,7 +12,7 @@
  * 進行処理(gameEngine)には一切手を入れなくてよい。
  */
 
-import type { EffectType } from '../../types/card';
+import type { EffectType, TargetType } from '../../types/card';
 import type { EffectHandler } from './effectContext';
 import {
   addShieldHandler,
@@ -106,3 +106,30 @@ export const VALUE_REQUIRED_EFFECTS: EffectType[] = [
   'addBreaker',
   'reviveFromGraveyard',
 ];
+
+/** 効果の対象。カード作成画面の選択肢として使う。 */
+export const TARGET_TYPES: TargetType[] = [
+  'self',
+  'opponent',
+  'ownCreatures',
+  'opponentCreatures',
+  'ownRandom',
+  'opponentRandom',
+  'chosenOwn',
+  'chosenOpponent',
+  'chosen',
+  'all',
+];
+
+export const TARGET_LABEL: Record<TargetType, string> = {
+  self: '自分(プレイヤー)',
+  opponent: '相手(プレイヤー)',
+  ownCreatures: '自分のクリーチャーすべて',
+  opponentCreatures: '相手のクリーチャーすべて',
+  ownRandom: '自分のクリーチャーからランダムに1体',
+  opponentRandom: '相手のクリーチャーからランダムに1体',
+  chosenOwn: '自分のクリーチャーから選んだ1体',
+  chosenOpponent: '相手のクリーチャーから選んだ1体',
+  chosen: 'どちらかのクリーチャーから選んだ1体',
+  all: 'すべてのクリーチャー',
+};

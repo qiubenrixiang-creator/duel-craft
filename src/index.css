@@ -259,3 +259,30 @@ body {
     animation: none !important;
   }
 }
+
+/**
+ * カード作成画面の「出来上がり確認」の列。
+ *
+ * 広い画面では左に貼り付けて、入力しながら常に見えるようにする。
+ * 狭い画面では折り返して上に来るため、貼り付けを解除する。
+ * (解除しないと、確認カードが画面上部に居座って入力欄を覆ってしまう)
+ */
+.dc-editor-preview {
+  position: sticky;
+  top: 12px;
+  width: 220px;
+  flex-shrink: 0;
+}
+
+@media (max-width: 719px) {
+  .dc-editor-preview {
+    position: static;
+    width: 100%;
+  }
+  /* 折り返した時は中央に寄せる */
+  .dc-editor-preview > * {
+    max-width: 330px;
+    margin-left: auto;
+    margin-right: auto;
+  }
+}
