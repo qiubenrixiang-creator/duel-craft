@@ -4,121 +4,148 @@
  * 画像素材は使わず、すべてCSSのグラデーションと図形だけで描いている。
  * (既存作品の画像・イラストを一切使わないため)
  *
- * 3層構造:
- *   sky  … 空・雲・夕焼け
- *   far  … 遠景(山・海・森など)
- *   near … 近景(地面)
+ * 【デザイン: サイバー空間】
+ * 8種類とも「暗い空間にグリッドとHUD図形が浮かぶ」という同じ骨格で、
+ * 主色(accent)と中央の図形(motif)だけを変えている。
+ * こうすることで、どの背景でもカードと文字が読みやすいまま、
+ * 場所ごとの雰囲気の違いを出せる。
+ *
+ * 層の構成:
+ *   base   … 空間全体の下地(暗いグラデーション)
+ *   grid   … 奥行きを出す格子
+ *   motif  … 中央に浮かぶHUD図形
+ *   気配   … 漂う粒子や走査ビーム(WeatherEffect が担当)
  */
 
 import type { FieldId } from '../types/ui';
 
+/** 中央に描くHUD図形の種類 */
+export type FieldMotif =
+  | 'rings' // 同心円(計器)
+  | 'circuit' // 回路基板
+  | 'hex' // 六角形のセル
+  | 'glitch' // 明滅する矩形群
+  | 'wave' // 横に走る波形
+  | 'orbit' // 傾いた軌道環
+  | 'radar' // 走査レーダー
+  | 'shards'; // 浮遊する破片
+
+/** 漂うものの種類 */
+export type FieldParticle = 'motes' | 'data' | 'ash' | 'spark' | 'none';
+
 export interface FieldDefinition {
   id: FieldId;
   label: string;
-  /** 空の層 */
-  sky: string;
-  /** 遠景の層 */
-  far: string;
-  /** 遠景の高さ(画面比) */
-  farHeight: string;
-  /** 近景の層。空島のように地面が無い場合は null */
-  near: string | null;
-  nearHeight: string;
-  /** この背景に合う天候演出 */
-  weather: 'clouds' | 'motes' | 'leaves' | 'snow' | 'none';
+  /** HUDに小さく出す英字名 */
+  code: string;
+  /** 空間の下地 */
+  base: string;
+  /** この空間の主色。グリッド・図形・粒子はすべてこの色で描く。 */
+  accent: string;
+  /** 格子1マスの大きさ(px)。小さいほど密に見える。 */
+  gridSize: number;
+  /** 格子の濃さ(0〜1) */
+  gridStrength: number;
+  motif: FieldMotif;
+  particle: FieldParticle;
 }
 
 export const FIELDS: FieldDefinition[] = [
   {
     id: 'plain',
-    label: '草原',
-    sky: 'linear-gradient(180deg,#7FC7F5 0%,#B6E3FA 45%,#E8F6E0 100%)',
-    far:
-      'radial-gradient(120% 100% at 20% 100%,#8FBF7A 0 60%,transparent 61%),' +
-      'radial-gradient(120% 100% at 75% 100%,#7FB26B 0 55%,transparent 56%)',
-    farHeight: '38%',
-    near: 'linear-gradient(180deg,#9ED184,#6FAE5E)',
-    nearHeight: '22%',
-    weather: 'clouds',
+    label: 'データ平原',
+    code: 'GRID FIELD',
+    base:
+      'radial-gradient(120% 90% at 50% 8%,#0B2138 0%,#060D1B 55%,#03060D 100%)',
+    accent: '#22D3EE',
+    gridSize: 64,
+    gridStrength: 0.5,
+    motif: 'rings',
+    particle: 'motes',
   },
   {
     id: 'coast',
-    label: '海岸',
-    sky: 'linear-gradient(180deg,#5FB8EE 0%,#A8DEF6 50%,#F4E3C0 100%)',
-    far: 'linear-gradient(180deg,#2E86C7,#4FB0E0)',
-    farHeight: '34%',
-    near: 'linear-gradient(180deg,#EBD9AE,#DCC591)',
-    nearHeight: '18%',
-    weather: 'clouds',
+    label: '冷却海',
+    code: 'COOLANT SEA',
+    base:
+      'radial-gradient(130% 100% at 50% 100%,#0A3350 0%,#05172B 55%,#020911 100%)',
+    accent: '#31B9FF',
+    gridSize: 52,
+    gridStrength: 0.45,
+    motif: 'wave',
+    particle: 'motes',
   },
   {
     id: 'mountain',
-    label: '山岳',
-    sky: 'linear-gradient(180deg,#6EA8E8 0%,#AFD4F2 55%,#DCEAF6 100%)',
-    far:
-      'linear-gradient(135deg,transparent 44%,#7C93B8 45%,#93A9C9 55%,transparent 56%),' +
-      'linear-gradient(215deg,transparent 44%,#6E86AC 45%,#8698BC 55%,transparent 56%)',
-    farHeight: '44%',
-    near: 'linear-gradient(180deg,#8FA98C,#6E8A6C)',
-    nearHeight: '20%',
-    weather: 'clouds',
+    label: '演算山脈',
+    code: 'CORE RIDGE',
+    base:
+      'radial-gradient(120% 90% at 50% 20%,#122038 0%,#080E1D 55%,#03060D 100%)',
+    accent: '#7DA6FF',
+    gridSize: 76,
+    gridStrength: 0.55,
+    motif: 'shards',
+    particle: 'ash',
   },
   {
     id: 'flower',
-    label: '花畑',
-    sky: 'linear-gradient(180deg,#8FD0F5 0%,#CDEAF8 45%,#FBE7F0 100%)',
-    far: 'radial-gradient(120% 100% at 50% 100%,#F2A9C4 0 55%,transparent 56%)',
-    farHeight: '36%',
-    near: 'linear-gradient(180deg,#EFB6CE,#A9CE85)',
-    nearHeight: '22%',
-    weather: 'motes',
+    label: '発光回廊',
+    code: 'BLOOM CORRIDOR',
+    base:
+      'radial-gradient(120% 90% at 50% 45%,#2A1140 0%,#120722 55%,#06030D 100%)',
+    accent: '#C46BFF',
+    gridSize: 44,
+    gridStrength: 0.4,
+    motif: 'hex',
+    particle: 'spark',
   },
   {
     id: 'snow',
-    label: '雪原',
-    sky: 'linear-gradient(180deg,#9FC4E8 0%,#CFE2F2 50%,#EEF6FC 100%)',
-    far: 'linear-gradient(135deg,transparent 45%,#C8DCEC 46%,#DDEBF6 56%,transparent 57%)',
-    farHeight: '38%',
-    near: 'linear-gradient(180deg,#F2F8FD,#DCE9F4)',
-    nearHeight: '20%',
-    weather: 'snow',
+    label: '静寂圏',
+    code: 'WHITE NOISE',
+    base:
+      'radial-gradient(120% 90% at 50% 30%,#16222E 0%,#0A1119 55%,#04070C 100%)',
+    accent: '#B8E6F5',
+    gridSize: 58,
+    gridStrength: 0.35,
+    motif: 'glitch',
+    particle: 'data',
   },
   {
     id: 'autumn',
-    label: '紅葉',
-    sky: 'linear-gradient(180deg,#87BFE8 0%,#E9CFA0 55%,#F6E2C4 100%)',
-    far:
-      'radial-gradient(110% 100% at 25% 100%,#D9762F 0 55%,transparent 56%),' +
-      'radial-gradient(110% 100% at 78% 100%,#C25A2A 0 50%,transparent 51%)',
-    farHeight: '38%',
-    near: 'linear-gradient(180deg,#C98F52,#A8703F)',
-    nearHeight: '20%',
-    weather: 'leaves',
+    label: '熱暴走域',
+    code: 'OVERHEAT ZONE',
+    base:
+      'radial-gradient(130% 100% at 50% 100%,#3A1608 0%,#1A0A08 55%,#0A0405 100%)',
+    accent: '#FF7A33',
+    gridSize: 48,
+    gridStrength: 0.5,
+    motif: 'radar',
+    particle: 'spark',
   },
   {
     id: 'ruins',
-    label: '古代遺跡',
-    sky: 'linear-gradient(180deg,#6FA9D8 0%,#C6DCEA 50%,#E4D9C2 100%)',
-    far:
-      'linear-gradient(90deg,transparent 8%,#BCB29C 8% 13%,transparent 13% 24%,' +
-      '#C6BCA6 24% 29%,transparent 29% 68%,#BCB29C 68% 73%,transparent 73% 85%,' +
-      '#C6BCA6 85% 90%,transparent 90%)',
-    farHeight: '40%',
-    near: 'linear-gradient(180deg,#B9AE96,#94896F)',
-    nearHeight: '18%',
-    weather: 'motes',
+    label: '廃棄サーバ',
+    code: 'DEAD SERVER',
+    base:
+      'radial-gradient(120% 90% at 50% 12%,#122A22 0%,#08150F 55%,#030806 100%)',
+    accent: '#3FE09A',
+    gridSize: 40,
+    gridStrength: 0.6,
+    motif: 'circuit',
+    particle: 'data',
   },
   {
     id: 'skyIsland',
-    label: '空島',
-    sky: 'linear-gradient(180deg,#5AA8E8 0%,#9BD0F2 40%,#F3D9E8 100%)',
-    far:
-      'radial-gradient(60% 44% at 22% 62%,#A9CE85 0 46%,transparent 47%),' +
-      'radial-gradient(52% 40% at 74% 74%,#8FBF7A 0 44%,transparent 45%)',
-    farHeight: '42%',
-    near: null,
-    nearHeight: '0%',
-    weather: 'motes',
+    label: '軌道基地',
+    code: 'ORBITAL',
+    base:
+      'radial-gradient(120% 100% at 50% 65%,#0D1B3C 0%,#070D1F 55%,#03050C 100%)',
+    accent: '#8FA2FF',
+    gridSize: 88,
+    gridStrength: 0.4,
+    motif: 'orbit',
+    particle: 'motes',
   },
 ];
 

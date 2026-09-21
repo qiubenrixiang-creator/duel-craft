@@ -39,7 +39,14 @@ import {
 import { validAttackTargets, validBlockers } from '../game/engine/combatSystem';
 import { evolutionTargets } from '../game/engine/evolutionSystem';
 import { getCard as lookupCard } from '../cards/cardPool';
-import { computeScale, GLASS, INK, ACCENT } from '../ui/tokens';
+import {
+  computeScale,
+  clipDiagonal,
+  GLASS,
+  INK,
+  ACCENT,
+  NEON,
+} from '../ui/tokens';
 import { playSE, startBgm, unlockAudio } from '../ui/sound';
 
 export interface BattleScreenProps {
@@ -594,6 +601,7 @@ export function BattleScreen({
           lastLog={state.log[state.log.length - 1]}
           scale={scale}
           onLogTap={() => setLogOpen(true)}
+          onExit={onExit}
         />
 
         {/* ===== 自分側 ===== */}
@@ -704,12 +712,19 @@ export function BattleScreen({
                 style={{
                   marginTop: 8 * scale,
                   padding: `${10 * scale}px`,
-                  borderRadius: 10 * scale,
-                  border: `1px solid ${GLASS.edge}`,
+                  border: 'none',
+                  clipPath: clipDiagonal(Math.max(4, 9 * scale)),
                   background:
-                    opponent.shields.length === 0 ? ACCENT.danger : ACCENT.navy,
-                  color: '#fff',
+                    opponent.shields.length === 0
+                      ? `linear-gradient(180deg,${ACCENT.danger},#B32643)`
+                      : `linear-gradient(180deg,${ACCENT.navy},#062334)`,
+                  boxShadow:
+                    opponent.shields.length === 0
+                      ? `0 0 ${14 * scale}px rgba(255,77,109,0.5)`
+                      : `inset 0 0 0 1px ${NEON.dim}`,
+                  color: opponent.shields.length === 0 ? '#FFF0F3' : NEON.bright,
                   fontWeight: 800,
+                  letterSpacing: '0.06em',
                   fontSize: 13 * scale,
                   cursor: 'pointer',
                   fontFamily: 'inherit',
@@ -750,29 +765,6 @@ export function BattleScreen({
           />
         </div>
 
-        {/* 退出 */}
-        <button
-          onClick={onExit}
-          style={{
-            position: 'absolute',
-            top: 10 * scale,
-            left: 40 * scale,
-            zIndex: 20,
-            // 指で押しやすい大きさを確保する
-            minHeight: 34,
-            padding: '8px 14px',
-            borderRadius: 999,
-            border: `1px solid ${GLASS.edge}`,
-            background: GLASS.panel,
-            backdropFilter: GLASS.blur,
-            color: INK.base,
-            fontSize: 12,
-            cursor: 'pointer',
-            fontFamily: 'inherit',
-          }}
-        >
-          ← 対戦をやめる
-        </button>
       </div>
 
       {/* ===== ドラッグ中のカード ===== */}
@@ -920,10 +912,15 @@ export function BattleScreen({
               fontSize: 24,
               fontWeight: 800,
               textAlign: 'center',
-              color: state.winner === seat ? ACCENT.gold : INK.dim,
+              letterSpacing: '0.2em',
+              color: state.winner === seat ? ACCENT.gold : ACCENT.danger,
+              textShadow:
+                state.winner === seat
+                  ? '0 0 24px rgba(255,197,61,0.6)'
+                  : '0 0 24px rgba(255,77,109,0.5)',
             }}
           >
-            {state.winner === seat ? '勝利' : '敗北'}
+            {state.winner === seat ? 'VICTORY' : 'DEFEAT'}
           </p>
           <p
             style={{
@@ -947,21 +944,24 @@ export function BattleScreen({
 /* ===== 補助 ===== */
 
 const primaryButton: React.CSSProperties = {
-  padding: '10px 18px',
-  borderRadius: 10,
-  border: '1px solid rgba(255,255,255,0.3)',
-  background: ACCENT.gold,
-  color: '#3A2A00',
+  padding: '11px 18px',
+  border: 'none',
+  clipPath: clipDiagonal(9),
+  background: `linear-gradient(180deg,${ACCENT.gold},#D89A12)`,
+  color: '#1A1200',
   fontWeight: 800,
+  letterSpacing: '0.06em',
   fontSize: 13,
+  boxShadow: '0 0 14px rgba(255,197,61,0.4)',
   cursor: 'pointer',
   fontFamily: 'inherit',
 };
 
 const secondaryButton: React.CSSProperties = {
   ...primaryButton,
-  background: 'rgba(90,104,128,0.6)',
-  color: '#fff',
+  background: 'rgba(11,20,38,0.85)',
+  boxShadow: `inset 0 0 0 1px ${NEON.faint}`,
+  color: INK.dim,
 };
 
 /** 能力の対象に選べるクリーチャーを列挙する */

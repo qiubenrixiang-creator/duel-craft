@@ -9,7 +9,7 @@
 import type { ReactNode } from 'react';
 import type { Card, CardInstance } from '../types/card';
 import { CardView } from './CardView';
-import { GLASS, INK } from '../ui/tokens';
+import { GLASS, INK, NEON, clipDiagonal } from '../ui/tokens';
 import { usePress } from '../ui/usePress';
 
 /* ===== ゾーンの共通の枠 ===== */
@@ -53,19 +53,30 @@ function ZoneFrame({
           fontSize: Math.max(8, 11 * scale),
           color: INK.dim,
           display: 'flex',
-          alignItems: 'baseline',
+          alignItems: 'center',
           gap: 5 * scale,
           paddingLeft: 2,
           flexShrink: 0,
         }}
       >
+        {/* ラベルの頭に置く光る目印 */}
+        <span
+          style={{
+            width: Math.max(2, 3 * scale),
+            height: Math.max(6, 9 * scale),
+            background: NEON.core,
+            boxShadow: `0 0 ${6 * scale}px ${NEON.glow}`,
+            flexShrink: 0,
+          }}
+        />
         {label}
         {count != null && (
           <b
+            className="hud-num"
             style={{
-              color: INK.base,
+              color: NEON.bright,
               fontSize: Math.max(9, 13 * scale),
-              fontVariantNumeric: 'tabular-nums',
+              textShadow: `0 0 ${7 * scale}px ${NEON.glow}`,
             }}
           >
             {count}
@@ -75,21 +86,21 @@ function ZoneFrame({
 
       <div
         {...press}
+        className={`${press.className} hud-frame hud-brackets${
+          highlighted ? ' is-active' : ''
+        }`}
         style={{
+          // 角の切り欠きの大きさ。拡大率に合わせて変える。
+          clipPath: clipDiagonal(Math.max(5, 10 * scale)),
           padding: 8 * scale,
           display: 'flex',
           minHeight: 0,
           flex: grow ? 1 : undefined,
-          background: GLASS.panel,
           backdropFilter: GLASS.blur,
-          border: `1px solid ${
-            highlighted ? 'rgba(79,184,245,0.9)' : GLASS.edgeSoft
-          }`,
-          borderRadius: 12 * scale,
           boxShadow: highlighted
-            ? '0 0 0 2px rgba(79,184,245,0.5), 0 0 18px rgba(79,184,245,0.4)'
-            : undefined,
-          transition: 'border-color 120ms, box-shadow 120ms',
+            ? `inset 0 0 0 1px ${NEON.core}, 0 0 ${18 * scale}px ${NEON.glow}`
+            : `inset 0 0 0 1px ${GLASS.edgeSoft}`,
+          transition: 'box-shadow 120ms',
         }}
       >
         {children}
@@ -119,12 +130,11 @@ export function ShieldZone({ count, label, scale }: ShieldZoneProps) {
             key={i}
             style={{
               height: 34 * scale,
-              borderRadius: 5 * scale,
-              background:
-                'linear-gradient(135deg,rgba(255,255,255,0.5),rgba(255,255,255,0.16))',
-              border: `1px solid ${GLASS.edge}`,
+              // 左上と右下を切り落とした装甲板として描く
+              clipPath: clipDiagonal(Math.max(3, 7 * scale)),
+              background: `linear-gradient(135deg,${NEON.faint},rgba(7,16,31,0.85))`,
+              boxShadow: `inset 0 0 0 1px ${NEON.dim}, 0 0 ${8 * scale}px rgba(34,211,238,0.18)`,
               marginTop: i === 0 ? 0 : -8 * scale,
-              boxShadow: `0 ${2 * scale}px ${8 * scale}px rgba(0,0,0,0.18)`,
             }}
           />
         ))}
@@ -427,6 +437,7 @@ export function DeckCounter({
 
   const box = (value: number, label: string, extra?: object) => (
     <div
+      className="hud-brackets"
       style={{
         flex: 1,
         display: 'flex',
@@ -434,17 +445,20 @@ export function DeckCounter({
         alignItems: 'center',
         justifyContent: 'center',
         padding: `${8 * scale}px 0`,
-        borderRadius: 9 * scale,
+        position: 'relative',
+        clipPath: clipDiagonal(Math.max(4, 8 * scale)),
         background: GLASS.panelSoft,
-        border: `1px solid ${GLASS.edgeSoft}`,
+        boxShadow: `inset 0 0 0 1px ${GLASS.edgeSoft}`,
         ...extra,
       }}
     >
       <b
+        className="hud-num"
         style={{
           fontSize: 20 * scale,
-          fontVariantNumeric: 'tabular-nums',
           lineHeight: 1,
+          color: INK.base,
+          textShadow: `0 0 ${8 * scale}px ${NEON.glow}`,
         }}
       >
         {value}

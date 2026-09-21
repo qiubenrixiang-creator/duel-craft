@@ -6,11 +6,22 @@
  *   中央 … 直前に何が起きたか(ログ1行)
  *   右   … 今どのフェーズか
  * を常に見えるようにする。
+ *
+ * 【デザイン: サイバーHUD】
+ * 角を斜めに切り落とした帯に、シアンの細線と等幅数字を載せる。
+ * 自分の番のときだけ左端のバーが明滅し、目線がそこへ行くようにしている。
  */
 
 import type { LogEntry, Phase } from '../types/game';
 import { PHASE_LABEL } from '../game/engine/phaseSystem';
-import { ACCENT, GLASS, INK } from '../ui/tokens';
+import {
+  ACCENT,
+  GLASS,
+  INK,
+  NEON,
+  VOID,
+  clipDiagonal,
+} from '../ui/tokens';
 
 /* ===== ターンバー ===== */
 
@@ -22,6 +33,8 @@ export interface TurnBarProps {
   lastLog: LogEntry | undefined;
   scale: number;
   onLogTap: () => void;
+  /** 対戦をやめる。バーの左端に小さく置く。 */
+  onExit?: () => void;
 }
 
 /** プレイヤーが意識するフェーズ(ドローは自動なので出さない) */
@@ -35,74 +48,154 @@ export function TurnBar({
   lastLog,
   scale,
   onLogTap,
+  onExit,
 }: TurnBarProps) {
+  const turnColor = isMyTurn ? ACCENT.gold : NEON.core;
+
   return (
     <div
       style={{
+        position: 'relative',
         height: 80 * scale,
         display: 'grid',
         gridTemplateColumns: 'auto 1fr auto',
         alignItems: 'center',
-        gap: 20 * scale,
-        padding: `0 ${20 * scale}px`,
+        gap: 16 * scale,
+        padding: `0 ${18 * scale}px 0 ${14 * scale}px`,
         margin: `${6 * scale}px 0`,
-        background: GLASS.panel,
+        clipPath: clipDiagonal(Math.max(5, 12 * scale)),
+        background: `linear-gradient(90deg,${GLASS.panel},rgba(7,16,31,0.62))`,
         backdropFilter: GLASS.blur,
-        border: `1px solid ${GLASS.edgeSoft}`,
-        borderRadius: 12 * scale,
+        boxShadow: `inset 0 0 0 1px ${GLASS.edgeSoft}`,
       }}
     >
-      {/* 今どちらの番か。ここが画面で最も目立つようにする。 */}
-      <div>
+      {/* 今どちらの番か。左端の縦バーで色分けし、自分の番なら明滅させる。 */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10 * scale }}>
+        {/*
+          退出ボタンはここに置く。画面の隅に浮かせるとゾーン名と重なり、
+          ノッチのある端末では押せなくなるため。
+        */}
+        {onExit && (
+          <button
+            onClick={onExit}
+            aria-label="対戦をやめる"
+            style={{
+              width: 30 * scale,
+              height: 30 * scale,
+              marginRight: 2 * scale,
+              flexShrink: 0,
+              border: 'none',
+              clipPath: clipDiagonal(Math.max(3, 7 * scale)),
+              background: 'rgba(4,7,15,0.7)',
+              boxShadow: `inset 0 0 0 1px ${NEON.faint}`,
+              color: INK.dim,
+              fontSize: 14 * scale,
+              lineHeight: 1,
+              cursor: 'pointer',
+              fontFamily: 'inherit',
+            }}
+          >
+            ←
+          </button>
+        )}
         <div
+          className={isMyTurn ? 'hud-pulse' : undefined}
           style={{
-            fontSize: 21 * scale,
-            fontWeight: 800,
-            letterSpacing: '0.02em',
-            color: isMyTurn ? ACCENT.gold : INK.base,
+            width: Math.max(2, 3 * scale),
+            height: 42 * scale,
+            background: turnColor,
+            boxShadow: `0 0 ${10 * scale}px ${turnColor}`,
           }}
-        >
-          {isMyTurn ? 'あなたの番' : `${opponentName} の番`}
-        </div>
-        <div style={{ fontSize: 11 * scale, color: INK.dim }}>
-          ターン {turnNumber}
+        />
+        <div>
+          <div
+            style={{
+              fontSize: 21 * scale,
+              fontWeight: 800,
+              letterSpacing: '0.04em',
+              color: isMyTurn ? ACCENT.gold : INK.base,
+              textShadow: isMyTurn
+                ? `0 0 ${12 * scale}px rgba(255,197,61,0.5)`
+                : 'none',
+            }}
+          >
+            {isMyTurn ? 'あなたの番' : `${opponentName} の番`}
+          </div>
+          <div
+            className="hud-num hud-label"
+            style={{ fontSize: 10 * scale, color: INK.dim, marginTop: 2 * scale }}
+          >
+            TURN {String(turnNumber).padStart(2, '0')}
+          </div>
         </div>
       </div>
 
-      {/* 直前の出来事 */}
+      {/* 直前の出来事。端末の記録らしく「>」を付ける。 */}
       <div
         onClick={onLogTap}
         style={{
-          fontSize: 14 * scale,
-          color: INK.dim,
-          textAlign: 'center',
-          whiteSpace: 'nowrap',
-          overflow: 'hidden',
-          textOverflow: 'ellipsis',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 8 * scale,
+          minWidth: 0,
           cursor: 'pointer',
+          padding: `${5 * scale}px ${10 * scale}px`,
+          clipPath: clipDiagonal(Math.max(3, 6 * scale)),
+          background: 'rgba(4,7,15,0.55)',
+          boxShadow: `inset 0 0 0 1px ${NEON.ghost}`,
         }}
       >
-        {lastLog?.text ?? '対戦開始'}
+        <span
+          className="hud-num"
+          style={{ color: NEON.core, fontSize: 12 * scale, flexShrink: 0 }}
+        >
+          &gt;
+        </span>
+        <span
+          style={{
+            fontSize: 13 * scale,
+            color: INK.dim,
+            whiteSpace: 'nowrap',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+          }}
+        >
+          {lastLog?.text ?? '対戦開始'}
+        </span>
       </div>
 
-      {/* フェーズ */}
-      <div style={{ display: 'flex', gap: 6 * scale }}>
-        {VISIBLE_PHASES.map((p) => {
+      {/* フェーズ。進行方向が分かるよう、間を細線でつなぐ。 */}
+      <div style={{ display: 'flex', alignItems: 'center' }}>
+        {VISIBLE_PHASES.map((p, i) => {
           const active = phase === p;
           return (
-            <div
-              key={p}
-              style={{
-                fontSize: 12 * scale,
-                padding: `${6 * scale}px ${14 * scale}px`,
-                borderRadius: 999,
-                color: active ? '#fff' : INK.dim,
-                background: active ? 'rgba(79,184,245,0.28)' : 'transparent',
-                border: `1px solid ${active ? ACCENT.select : 'transparent'}`,
-                whiteSpace: 'nowrap',
-              }}
-            >
-              {PHASE_LABEL[p]}
+            <div key={p} style={{ display: 'flex', alignItems: 'center' }}>
+              {i > 0 && (
+                <div
+                  style={{
+                    width: 10 * scale,
+                    height: 1,
+                    background: NEON.faint,
+                  }}
+                />
+              )}
+              <div
+                className="hud-label"
+                style={{
+                  fontSize: 11 * scale,
+                  fontWeight: 700,
+                  padding: `${6 * scale}px ${13 * scale}px`,
+                  clipPath: clipDiagonal(Math.max(3, 7 * scale)),
+                  color: active ? VOID.base : INK.dim,
+                  background: active ? NEON.core : 'rgba(34,211,238,0.06)',
+                  boxShadow: active
+                    ? `0 0 ${12 * scale}px ${NEON.glow}`
+                    : `inset 0 0 0 1px ${NEON.faint}`,
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                {PHASE_LABEL[p]}
+              </div>
             </div>
           );
         })}
@@ -139,20 +232,22 @@ export function ActionButtons({
   const base: React.CSSProperties = {
     fontFamily: 'inherit',
     fontWeight: 800,
-    color: '#fff',
+    letterSpacing: '0.06em',
+    color: INK.base,
     cursor: 'pointer',
-    borderRadius: 12 * scale,
-    border: `1px solid ${GLASS.edge}`,
+    border: 'none',
+    clipPath: clipDiagonal(Math.max(5, 12 * scale)),
     height: 72 * scale,
     width: 160 * scale,
     fontSize: 15 * scale,
     background: GLASS.panel,
     backdropFilter: GLASS.blur,
+    boxShadow: `inset 0 0 0 1px ${NEON.faint}`,
     transition: 'filter 120ms',
   };
 
   const disabledStyle: React.CSSProperties = {
-    opacity: 0.35,
+    opacity: 0.3,
     cursor: 'not-allowed',
   };
 
@@ -161,7 +256,7 @@ export function ActionButtons({
       style={{
         display: 'flex',
         alignItems: 'flex-end',
-        gap: 12 * scale,
+        gap: 10 * scale,
       }}
     >
       <button
@@ -169,7 +264,8 @@ export function ActionButtons({
         disabled={!canCancel}
         style={{
           ...base,
-          background: 'rgba(90,104,128,0.6)',
+          color: INK.dim,
+          background: 'rgba(11,20,38,0.75)',
           ...(canCancel ? {} : disabledStyle),
         }}
       >
@@ -181,11 +277,7 @@ export function ActionButtons({
         <button
           onClick={onToMain}
           disabled={!enabled}
-          style={{
-            ...base,
-            background: ACCENT.navy,
-            ...(enabled ? {} : disabledStyle),
-          }}
+          style={{ ...phaseButton(base, scale), ...(enabled ? {} : disabledStyle) }}
         >
           メインへ
         </button>
@@ -194,11 +286,7 @@ export function ActionButtons({
         <button
           onClick={onToAttack}
           disabled={!enabled}
-          style={{
-            ...base,
-            background: ACCENT.navy,
-            ...(enabled ? {} : disabledStyle),
-          }}
+          style={{ ...phaseButton(base, scale), ...(enabled ? {} : disabledStyle) }}
         >
           攻撃へ
         </button>
@@ -207,11 +295,7 @@ export function ActionButtons({
         <button
           onClick={onToMain}
           disabled={!enabled}
-          style={{
-            ...base,
-            background: ACCENT.navy,
-            ...(enabled ? {} : disabledStyle),
-          }}
+          style={{ ...phaseButton(base, scale), ...(enabled ? {} : disabledStyle) }}
         >
           メインに戻る
         </button>
@@ -224,9 +308,11 @@ export function ActionButtons({
           ...base,
           width: 220 * scale,
           fontSize: 17 * scale,
-          background: 'linear-gradient(180deg,#FFDE72,#E8B21F)',
-          color: '#3A2A00',
-          border: `1px solid rgba(255,255,255,0.5)`,
+          background: `linear-gradient(180deg,${ACCENT.gold},#D89A12)`,
+          color: '#1A1200',
+          boxShadow: enabled
+            ? `0 0 ${16 * scale}px rgba(255,197,61,0.45), inset 0 0 0 1px rgba(255,236,178,0.7)`
+            : 'none',
           ...(enabled ? {} : disabledStyle),
         }}
       >
@@ -234,6 +320,19 @@ export function ActionButtons({
       </button>
     </div>
   );
+}
+
+/** フェーズを進めるボタンの見た目(シアン寄りの濃紺) */
+function phaseButton(
+  base: React.CSSProperties,
+  scale: number
+): React.CSSProperties {
+  return {
+    ...base,
+    background: `linear-gradient(180deg,${ACCENT.navy},#062334)`,
+    color: NEON.bright,
+    boxShadow: `inset 0 0 0 1px ${NEON.dim}, 0 0 ${12 * scale}px rgba(34,211,238,0.25)`,
+  };
 }
 
 /* ===== ログ全文 ===== */
@@ -258,8 +357,8 @@ export function GameLog({ log, onClose }: GameLogProps) {
         padding:
           'max(12px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right))' +
           ' max(12px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left))',
-        background: 'rgba(8,14,28,0.72)',
-        backdropFilter: 'blur(4px)',
+        background: 'rgba(3,6,12,0.78)',
+        backdropFilter: 'blur(5px)',
       }}
     >
       <div
@@ -269,15 +368,23 @@ export function GameLog({ log, onClose }: GameLogProps) {
           maxWidth: 560,
           maxHeight: '80svh',
           overflowY: 'auto',
+          clipPath: clipDiagonal(16),
           background: GLASS.panel,
           backdropFilter: GLASS.blur,
-          border: `1px solid ${GLASS.edge}`,
-          borderRadius: 16,
-          padding: 20,
+          boxShadow: `inset 0 0 0 1px ${GLASS.edge}`,
+          padding: 22,
           color: INK.base,
         }}
       >
-        <h2 style={{ fontSize: 17, fontWeight: 700, marginBottom: 12 }}>
+        <h2
+          className="hud-label"
+          style={{
+            fontSize: 13,
+            fontWeight: 800,
+            marginBottom: 14,
+            color: NEON.core,
+          }}
+        >
           対戦ログ
         </h2>
         {/* 新しいものを上に出す */}
@@ -287,13 +394,16 @@ export function GameLog({ log, onClose }: GameLogProps) {
             style={{
               fontSize: 13,
               lineHeight: 1.7,
-              padding: '4px 0',
-              borderBottom: `1px solid ${GLASS.edgeSoft}`,
+              padding: '5px 0',
+              borderBottom: `1px solid ${NEON.ghost}`,
               color: entry.kind === 'effect' ? ACCENT.gold : INK.base,
             }}
           >
-            <span style={{ color: INK.dim, fontSize: 11, marginRight: 8 }}>
-              T{entry.turn}
+            <span
+              className="hud-num"
+              style={{ color: NEON.dim, fontSize: 11, marginRight: 10 }}
+            >
+              T{String(entry.turn).padStart(2, '0')}
             </span>
             {entry.text}
           </div>
@@ -301,15 +411,17 @@ export function GameLog({ log, onClose }: GameLogProps) {
         <button
           onClick={onClose}
           style={{
-            marginTop: 16,
+            marginTop: 18,
             width: '100%',
-            padding: '12px',
-            borderRadius: 10,
-            border: `1px solid ${GLASS.edge}`,
-            background: 'rgba(255,255,255,0.1)',
-            color: INK.base,
+            padding: '13px',
+            border: 'none',
+            clipPath: clipDiagonal(10),
+            background: 'rgba(34,211,238,0.12)',
+            boxShadow: `inset 0 0 0 1px ${NEON.dim}`,
+            color: NEON.bright,
             fontFamily: 'inherit',
-            fontWeight: 700,
+            fontWeight: 800,
+            letterSpacing: '0.08em',
             cursor: 'pointer',
           }}
         >

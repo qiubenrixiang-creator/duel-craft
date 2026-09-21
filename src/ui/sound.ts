@@ -143,12 +143,16 @@ export function playSE(name: SoundName): void {
 /**
  * BGMは音声ファイル(public/bgm/*.mp3)を鳴らす。
  *
- * 曲を差し替えたいときは、public/bgm/ の中の同名ファイルを
- * 置き換えるだけでよい(コードの変更は不要)。
+ *   public/bgm/bgm1.mp3
+ *   public/bgm/bgm2.mp3
+ *   public/bgm/bgm3.mp3
  *
- *   menu.mp3   … ホーム画面
- *   battle.mp3 … 対戦中
- *   result.mp3 … 決着(勝敗が決まったあと)
+ * 対戦中はこの3曲をシャッフルして順に流す(1曲終わると次の曲へ)。
+ * ホーム画面と決着後は、3曲の中から1曲をランダムに選んでループする。
+ *
+ * 曲を差し替えたいときは、public/bgm/ の中の同名ファイルを
+ * 置き換えるだけでよい(コードの変更は不要)。曲数を増やす場合は
+ * ファイルを足して下の TRACKS に名前を追加する。
  *
  * 【ブラウザの制限について】
  * スマートフォンでは「利用者が一度画面に触れるまで音を鳴らせない」決まりが
@@ -156,57 +160,100 @@ export function playSE(name: SoundName): void {
  * 鳴らし始める。
  */
 
-export type BgmMood = 'menu' | 'battle' | 'result';
+/** 用意している曲。増やすときはここにファイル名(拡張子なし)を足す。 */
+const TRACKS = ['bgm1', 'bgm2', 'bgm3'] as const;
+type TrackId = (typeof TRACKS)[number];
 
 /**
  * import.meta.env.BASE_URL には公開先のパス(/duel-craft/)が入る。
  * これを付けないとGitHub Pagesで音声が見つからない。
  */
-const BGM_SRC: Record<BgmMood, string> = {
-  menu: `${import.meta.env.BASE_URL}bgm/menu.mp3`,
-  battle: `${import.meta.env.BASE_URL}bgm/battle.mp3`,
-  result: `${import.meta.env.BASE_URL}bgm/result.mp3`,
+function trackSrc(track: TrackId): string {
+  return `${import.meta.env.BASE_URL}bgm/${track}.mp3`;
+}
+
+export type BgmMood = 'menu' | 'battle' | 'result';
+
+/** 場面ごとの音量(0〜1)。効果音を邪魔しない程度に抑える。 */
+const MOOD_GAIN: Record<BgmMood, number> = {
+  menu: 0.4,
+  battle: 0.38,
+  result: 0.46,
 };
 
-/** 曲ごとの音量(0〜1)。効果音を邪魔しない程度に抑える。 */
-const BGM_GAIN: Record<BgmMood, number> = {
-  menu: 0.45,
-  battle: 0.4,
-  result: 0.5,
+/** 対戦中だけ、1曲終わったら次の曲へ進む(それ以外は同じ曲をループ) */
+const MOOD_CHAINS: Record<BgmMood, boolean> = {
+  menu: false,
+  battle: true,
+  result: false,
 };
 
 /** 曲を切り替えるときのフェード時間(ミリ秒) */
 const FADE_MS = 700;
 
-const players = new Map<BgmMood, HTMLAudioElement>();
-const fadeTimers = new Map<BgmMood, ReturnType<typeof setInterval>>();
+const players = new Map<TrackId, HTMLAudioElement>();
+const fadeTimers = new Map<TrackId, ReturnType<typeof setInterval>>();
 
 let bgmMuted = false;
 let currentMood: BgmMood | null = null;
-/** まだ音を鳴らせない間、鳴らしたい曲を覚えておく */
+let currentTrack: TrackId | null = null;
+/** まだ流していない曲。空になったら混ぜ直す。 */
+let queue: TrackId[] = [];
+/** まだ音を鳴らせない間、鳴らしたい場面を覚えておく */
 let pendingMood: BgmMood | null = null;
 let audioUnlocked = false;
 
-function getPlayer(mood: BgmMood): HTMLAudioElement | null {
+/** 配列を混ぜる(フィッシャー・イェーツ法) */
+function shuffle<T>(items: readonly T[]): T[] {
+  const result = [...items];
+  for (let i = result.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [result[i], result[j]] = [result[j], result[i]];
+  }
+  return result;
+}
+
+/**
+ * 次に流す曲を決める。
+ * 同じ曲が2回続かないよう、混ぜ直した直後に前と同じ曲が来たら1つ後ろへ回す。
+ */
+function nextTrack(): TrackId {
+  if (queue.length === 0) {
+    queue = shuffle(TRACKS);
+    if (TRACKS.length > 1 && queue[0] === currentTrack) {
+      queue.push(queue.shift() as TrackId);
+    }
+  }
+  return queue.shift() as TrackId;
+}
+
+function getPlayer(track: TrackId): HTMLAudioElement | null {
   if (typeof Audio === 'undefined') return null;
-  let el = players.get(mood);
+  let el = players.get(track);
   if (!el) {
-    el = new Audio(BGM_SRC[mood]);
-    el.loop = true;
+    el = new Audio(trackSrc(track));
     el.preload = 'none';
     el.volume = 0;
-    // 音量を下げても消えないように、再生位置は保持する
-    players.set(mood, el);
+    // 1曲終わったときの動きは、その時の場面によって変える
+    el.addEventListener('ended', () => handleTrackEnded(track));
+    players.set(track, el);
   }
   return el;
 }
 
-/** 音量を目標値までなめらかに変える。0にしたときは停止する。 */
-function fadeTo(mood: BgmMood, target: number, onDone?: () => void): void {
-  const el = players.get(mood);
+/** 曲が最後まで再生された(ループ指定でない場合だけ呼ばれる) */
+function handleTrackEnded(track: TrackId): void {
+  if (track !== currentTrack || !currentMood) return;
+  if (!MOOD_CHAINS[currentMood]) return;
+  playTrack(nextTrack(), currentMood);
+}
+
+/** 音量を目標値までなめらかに変える */
+function fadeTo(track: TrackId, target: number, onDone?: () => void): void {
+  const el = players.get(track);
   if (!el) return;
 
-  const existing = fadeTimers.get(mood);
+  const existing = fadeTimers.get(track);
   if (existing) clearInterval(existing);
 
   const stepMs = 50;
@@ -216,39 +263,43 @@ function fadeTo(mood: BgmMood, target: number, onDone?: () => void): void {
 
   const timer = setInterval(() => {
     count++;
-    const next = el.volume + delta;
-    el.volume = Math.min(1, Math.max(0, next));
+    el.volume = Math.min(1, Math.max(0, el.volume + delta));
     if (count >= steps) {
       el.volume = Math.min(1, Math.max(0, target));
       clearInterval(timer);
-      fadeTimers.delete(mood);
+      fadeTimers.delete(track);
       onDone?.();
     }
   }, stepMs);
 
-  fadeTimers.set(mood, timer);
+  fadeTimers.set(track, timer);
 }
 
-/** 実際に切り替える(音が鳴らせる状態になってから呼ぶ) */
-function switchTo(mood: BgmMood): void {
-  const previous = currentMood;
+/** 実際に1曲を鳴らし始める(前の曲はフェードアウトさせる) */
+function playTrack(track: TrackId, mood: BgmMood): void {
+  const previous = currentTrack;
+  currentTrack = track;
   currentMood = mood;
   pendingMood = null;
 
-  if (previous && previous !== mood) {
+  if (previous && previous !== track) {
     fadeTo(previous, 0, () => {
       const old = players.get(previous);
-      if (old && currentMood !== previous) {
+      if (old && currentTrack !== previous) {
         old.pause();
         old.currentTime = 0;
       }
     });
   }
 
-  const el = getPlayer(mood);
+  const el = getPlayer(track);
   if (!el) return;
 
+  // 対戦中は次の曲へ進みたいのでループしない
+  el.loop = !MOOD_CHAINS[mood];
   el.preload = 'auto';
+  el.currentTime = 0;
+
   if (bgmMuted) {
     el.volume = 0;
     return;
@@ -263,29 +314,30 @@ function switchTo(mood: BgmMood): void {
       audioUnlocked = false;
     });
   }
-  fadeTo(mood, BGM_GAIN[mood]);
+  fadeTo(track, MOOD_GAIN[mood]);
 }
 
 /**
- * BGMを開始する。同じ曲が既に鳴っていれば何もしない。
+ * BGMを開始する。同じ場面が既に鳴っていれば何もしない。
  * まだ画面に触れられていない場合は、最初のタップまで待つ。
  */
 export function startBgm(mood: BgmMood): void {
-  if (currentMood === mood && !pendingMood) return;
+  if (currentMood === mood && currentTrack && !pendingMood) return;
   if (!audioUnlocked) {
     pendingMood = mood;
     return;
   }
-  switchTo(mood);
+  playTrack(nextTrack(), mood);
 }
 
 export function stopBgm(): void {
   pendingMood = null;
-  if (currentMood) {
-    const mood = currentMood;
-    currentMood = null;
-    fadeTo(mood, 0, () => {
-      const el = players.get(mood);
+  currentMood = null;
+  const track = currentTrack;
+  currentTrack = null;
+  if (track) {
+    fadeTo(track, 0, () => {
+      const el = players.get(track);
       if (el) {
         el.pause();
         el.currentTime = 0;
@@ -296,14 +348,14 @@ export function stopBgm(): void {
 
 export function setBgmMuted(muted: boolean): void {
   bgmMuted = muted;
-  if (!currentMood) return;
+  if (!currentTrack || !currentMood) return;
 
   if (muted) {
-    fadeTo(currentMood, 0);
+    fadeTo(currentTrack, 0);
   } else {
-    const el = getPlayer(currentMood);
+    const el = getPlayer(currentTrack);
     if (el) void el.play()?.catch(() => undefined);
-    fadeTo(currentMood, BGM_GAIN[currentMood]);
+    fadeTo(currentTrack, MOOD_GAIN[currentMood]);
   }
 }
 
@@ -322,12 +374,10 @@ export function unlockAudio(): void {
   audioUnlocked = true;
 
   const want = pendingMood ?? currentMood;
-  if (want) {
-    // 保留していた曲、または止まってしまった曲を鳴らし直す
-    const el = players.get(want);
-    if (!el || el.paused || want !== currentMood) {
-      currentMood = null;
-      switchTo(want);
-    }
+  if (!want) return;
+
+  const el = currentTrack ? players.get(currentTrack) : null;
+  if (pendingMood || !el || el.paused) {
+    playTrack(currentTrack && el ? currentTrack : nextTrack(), want);
   }
 }

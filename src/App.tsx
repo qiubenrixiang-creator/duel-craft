@@ -14,7 +14,7 @@ import { isFirebaseConfigured } from './network/firebase';
 import { loadCards, loadDecks, loadPlayerName, savePlayerName } from './network/localStore';
 import { SAMPLE_CARDS } from './cards/sampleCards';
 import { randomFieldId } from './ui/fields';
-import { ACCENT, GLASS, INK } from './ui/tokens';
+import { ACCENT, GLASS, INK, NEON, VOID, clipDiagonal } from './ui/tokens';
 import { startBgm, unlockAudio } from './ui/sound';
 
 type Screen = 'home' | 'battle';
@@ -88,22 +88,42 @@ export default function App() {
     <div
       className="dc-page-root"
       style={{
-        background: 'linear-gradient(180deg,#0B1020,#16233B)',
         color: INK.base,
+        // 暗い下地 + 細いグリッド + 上から差すシアンの光
+        background:
+          `radial-gradient(120% 80% at 50% -10%,rgba(34,211,238,0.16),transparent 60%),` +
+          `repeating-linear-gradient(0deg,transparent 0 31px,rgba(34,211,238,0.05) 31px 32px),` +
+          `repeating-linear-gradient(90deg,transparent 0 31px,rgba(34,211,238,0.05) 31px 32px),` +
+          `linear-gradient(180deg,${VOID.deep},${VOID.base})`,
       }}
     >
       <div style={{ maxWidth: 720, margin: '0 auto' }}>
-        <header
-          style={{
-            borderBottom: `1px solid ${GLASS.edgeSoft}`,
-            paddingBottom: 16,
-            marginBottom: 20,
-          }}
-        >
-          <h1 style={{ fontSize: 26, fontWeight: 800 }}>Duel Craft</h1>
-          <p style={{ fontSize: 13, color: INK.dim, marginTop: 4 }}>
+        <header style={{ marginBottom: 22 }}>
+          <div
+            className="hud-num hud-label"
+            style={{ fontSize: 10, color: NEON.dim, marginBottom: 6 }}
+          >
+            DUEL SYSTEM // ONLINE
+          </div>
+          <h1
+            style={{
+              fontSize: 30,
+              fontWeight: 800,
+              letterSpacing: '0.14em',
+              color: NEON.bright,
+              textShadow: `0 0 18px ${NEON.glow}`,
+            }}
+          >
+            DUEL CRAFT
+          </h1>
+          <p style={{ fontSize: 13, color: INK.dim, marginTop: 6 }}>
             自分でカードを作って遊べるカードゲーム
           </p>
+          {/* 見出しの下に引く二重線。太さを変えてHUDらしくする。 */}
+          <div style={{ marginTop: 14, display: 'flex', gap: 4 }}>
+            <div style={{ width: 64, height: 2, background: NEON.core }} />
+            <div style={{ flex: 1, height: 2, background: NEON.ghost }} />
+          </div>
         </header>
 
         <section style={panelStyle}>
@@ -124,10 +144,11 @@ export default function App() {
                 width: '100%',
                 marginTop: 6,
                 padding: '10px 12px',
-                borderRadius: 8,
-                border: `1px solid ${GLASS.edgeSoft}`,
-                background: 'rgba(255,255,255,0.06)',
-                color: INK.base,
+                border: 'none',
+                clipPath: clipDiagonal(7),
+                boxShadow: `inset 0 0 0 1px ${GLASS.edgeSoft}`,
+                background: 'rgba(4,7,15,0.7)',
+                color: NEON.bright,
                 fontFamily: 'inherit',
                 fontSize: 14,
               }}
@@ -199,29 +220,34 @@ function buildSampleDeck(pool: Card[]): string[] {
 }
 
 const panelStyle: React.CSSProperties = {
+  position: 'relative',
+  clipPath: clipDiagonal(14),
   background: GLASS.panel,
-  border: `1px solid ${GLASS.edgeSoft}`,
-  borderRadius: 14,
+  boxShadow: `inset 0 0 0 1px ${GLASS.edgeSoft}`,
   padding: 18,
   marginBottom: 16,
 };
 
 const h2Style: React.CSSProperties = {
-  fontSize: 16,
-  fontWeight: 700,
-  marginBottom: 10,
+  fontSize: 13,
+  fontWeight: 800,
+  letterSpacing: '0.16em',
+  color: NEON.core,
+  marginBottom: 12,
 };
 
 const buttonStyle: React.CSSProperties = {
   marginTop: 16,
   width: '100%',
-  padding: '14px',
-  borderRadius: 10,
+  padding: '15px',
   border: 'none',
-  background: ACCENT.gold,
-  color: '#3A2A00',
+  clipPath: clipDiagonal(12),
+  background: `linear-gradient(180deg,${ACCENT.gold},#D89A12)`,
+  color: '#1A1200',
   fontWeight: 800,
   fontSize: 15,
+  letterSpacing: '0.1em',
+  boxShadow: '0 0 18px rgba(255,197,61,0.45)',
   cursor: 'pointer',
   fontFamily: 'inherit',
 };

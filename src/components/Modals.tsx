@@ -16,6 +16,8 @@ import {
   CIV_LABEL,
   GLASS,
   INK,
+  NEON,
+  clipDiagonal,
 } from '../ui/tokens';
 import { RARITY_COLOR, RARITY_LABEL } from '../types/collection';
 import { EFFECT_LABEL } from '../game/effects/effectRegistry';
@@ -45,8 +47,8 @@ export function Modal({ onClose, children, maxWidth = 520 }: ModalProps) {
         padding:
           'max(12px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right))' +
           ' max(12px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left))',
-        background: 'rgba(8,14,28,0.72)',
-        backdropFilter: 'blur(4px)',
+        background: 'rgba(3,6,12,0.78)',
+        backdropFilter: 'blur(5px)',
       }}
     >
       <div
@@ -56,10 +58,10 @@ export function Modal({ onClose, children, maxWidth = 520 }: ModalProps) {
           maxWidth,
           maxHeight: '86svh',
           overflowY: 'auto',
+          clipPath: clipDiagonal(16),
           background: GLASS.panel,
           backdropFilter: GLASS.blur,
-          border: `1px solid ${GLASS.edge}`,
-          borderRadius: 16,
+          boxShadow: `inset 0 0 0 1px ${GLASS.edge}`,
           padding: 20,
           color: INK.base,
         }}
@@ -280,15 +282,25 @@ export function ConfirmModal({
           style={{
             ...buttonBase,
             flex: 1,
-            background: danger ? ACCENT.danger : ACCENT.gold,
-            color: danger ? '#fff' : '#3A2A00',
+            background: danger
+              ? `linear-gradient(180deg,${ACCENT.danger},#B32643)`
+              : `linear-gradient(180deg,${ACCENT.gold},#D89A12)`,
+            color: danger ? '#FFF0F3' : '#1A1200',
+            boxShadow: danger
+              ? '0 0 16px rgba(255,77,109,0.45)'
+              : '0 0 16px rgba(255,197,61,0.40)',
           }}
         >
           {confirmLabel}
         </button>
         <button
           onClick={onCancel}
-          style={{ ...buttonBase, background: 'rgba(90,104,128,0.6)', color: '#fff' }}
+          style={{
+            ...buttonBase,
+            background: 'rgba(11,20,38,0.85)',
+            boxShadow: `inset 0 0 0 1px ${NEON.faint}`,
+            color: INK.dim,
+          }}
         >
           キャンセル
         </button>
@@ -304,10 +316,11 @@ function Chip({ children, color }: { children: ReactNode; color?: string }) {
     <span
       style={{
         fontSize: 11,
+        letterSpacing: '0.06em',
         padding: '4px 11px',
-        borderRadius: 999,
-        background: color ? `${color}33` : 'rgba(255,255,255,0.12)',
-        border: `1px solid ${color ?? GLASS.edgeSoft}`,
+        clipPath: clipDiagonal(5),
+        background: color ? `${color}22` : 'rgba(34,211,238,0.10)',
+        boxShadow: `inset 0 0 0 1px ${color ?? GLASS.edgeSoft}`,
         color: color ?? INK.base,
       }}
     >
@@ -325,11 +338,12 @@ const bulletStyle: React.CSSProperties = {
 
 const buttonBase: React.CSSProperties = {
   fontFamily: 'inherit',
-  fontWeight: 700,
+  fontWeight: 800,
   fontSize: 14,
+  letterSpacing: '0.08em',
   padding: '12px 20px',
-  borderRadius: 10,
-  border: `1px solid ${GLASS.edge}`,
+  border: 'none',
+  clipPath: clipDiagonal(10),
   cursor: 'pointer',
 };
 
@@ -337,8 +351,9 @@ const closeButtonStyle: React.CSSProperties = {
   ...buttonBase,
   marginTop: 16,
   width: '100%',
-  background: 'rgba(255,255,255,0.1)',
-  color: INK.base,
+  background: 'rgba(34,211,238,0.12)',
+  boxShadow: `inset 0 0 0 1px ${NEON.dim}`,
+  color: NEON.bright,
 };
 
 /** キーワード能力を日本語の一覧にする */

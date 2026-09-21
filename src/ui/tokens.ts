@@ -3,52 +3,81 @@
  *
  * 色やサイズをここにまとめ、各コンポーネントは必ずここを参照する。
  * (仕様書の「ハードコード禁止」に対応)
+ *
+ * 【デザインの方針: サイバーHUD】
+ * 真っ黒に近い紺をベースに、シアンの細い発光線で情報を囲む。
+ * 面は塗らずに「線と角のブラケットで示す」ことで、
+ * カードのイラストと文明色が背景に埋もれないようにしている。
  */
 
 import type { Civilization } from '../types/card';
 
-/** ガラスUIの基本。背景が透けて見える程度の透明度にする。 */
+/** 画面全体の下地。ここより明るい色は情報を持つ要素だけに使う。 */
+export const VOID = {
+  base: '#04070F',
+  deep: '#070D1A',
+  raised: '#0B1426',
+} as const;
+
+/** UI全体の基準となるネオン色(シアン) */
+export const NEON = {
+  core: '#22D3EE',
+  bright: '#7DF9FF',
+  dim: 'rgba(34,211,238,0.55)',
+  faint: 'rgba(34,211,238,0.22)',
+  ghost: 'rgba(34,211,238,0.10)',
+  glow: 'rgba(34,211,238,0.45)',
+} as const;
+
+/**
+ * パネル(情報を載せる面)。
+ * 半透明の紺 + シアンの縁 + 発光で、HUDらしい浮遊感を出す。
+ */
 export const GLASS = {
-  panel: 'rgba(15,23,42,0.72)',
-  panelSoft: 'rgba(15,23,42,0.55)',
-  edge: 'rgba(255,255,255,0.22)',
-  edgeSoft: 'rgba(255,255,255,0.12)',
-  blur: 'blur(10px)',
+  panel: 'rgba(7,16,31,0.78)',
+  panelSoft: 'rgba(7,16,31,0.52)',
+  edge: 'rgba(34,211,238,0.55)',
+  edgeSoft: 'rgba(34,211,238,0.20)',
+  blur: 'blur(8px)',
 } as const;
 
 export const INK = {
-  base: '#F4F7FB',
-  dim: 'rgba(244,247,251,0.62)',
-  /** カード面は明るい背景なので、文字は濃い色にする */
-  onCard: '#16233B',
-  onCardDim: '#5A6B85',
+  base: '#DCF4FF',
+  dim: 'rgba(156,203,226,0.62)',
+  /** カード面もダークなので、カード上の文字も明るい色にする */
+  onCard: '#E4F5FF',
+  onCardDim: 'rgba(150,196,222,0.60)',
 } as const;
 
-/** 文明ごとのアクセント色。UIの強調にのみ使い、背景は変えない。 */
+/** 文明ごとのアクセント色。暗い背景で映えるよう彩度を上げている。 */
 export const CIV_COLOR: Record<Civilization, string> = {
-  fire: '#FF8A3D',
-  water: '#4FB8F5',
-  nature: '#3FD08A',
-  light: '#FFD24A',
-  darkness: '#B47BF5',
+  fire: '#FF6A33',
+  water: '#31B9FF',
+  nature: '#2FE39B',
+  light: '#FFD84A',
+  darkness: '#B863FF',
 };
 
-/** カード面のイラスト領域に使う淡いグラデーション(画像未設定時) */
+/**
+ * カード面のイラスト領域に使う背景(画像未設定時)。
+ * ダークカードに合わせ、文明色をうっすら発光させた暗いグラデーションにする。
+ */
 export const CIV_ART_GRADIENT: Record<Civilization, string> = {
-  fire: 'linear-gradient(150deg,#FFD9B0,#FF9A56)',
-  water: 'linear-gradient(150deg,#CDEBFF,#63B9F0)',
-  nature: 'linear-gradient(150deg,#D5F5DF,#5CC894)',
-  light: 'linear-gradient(150deg,#FFF3C8,#FFD24A)',
-  darkness: 'linear-gradient(150deg,#E4D4FA,#A87BE8)',
+  fire: 'radial-gradient(120% 90% at 30% 20%,rgba(255,106,51,0.55),rgba(90,22,6,0.9) 60%,#180703)',
+  water: 'radial-gradient(120% 90% at 30% 20%,rgba(49,185,255,0.55),rgba(6,48,90,0.9) 60%,#03101E)',
+  nature: 'radial-gradient(120% 90% at 30% 20%,rgba(47,227,155,0.5),rgba(7,68,48,0.9) 60%,#03150F)',
+  light: 'radial-gradient(120% 90% at 30% 20%,rgba(255,216,74,0.5),rgba(92,70,6,0.9) 60%,#181203)',
+  darkness:
+    'radial-gradient(120% 90% at 30% 20%,rgba(184,99,255,0.5),rgba(56,16,94,0.9) 60%,#0F0419)',
 };
 
-/** パワー表示など、カード上で濃く出したい文明色 */
+/** パワー表示など、暗いカード上で強く光らせたい文明色 */
 export const CIV_DEEP: Record<Civilization, string> = {
-  fire: '#D2551A',
-  water: '#1D7FC0',
-  nature: '#218F5E',
-  light: '#B8890A',
-  darkness: '#7B45C4',
+  fire: '#FF9160',
+  water: '#6FD2FF',
+  nature: '#6BF3BE',
+  light: '#FFE886',
+  darkness: '#D09BFF',
 };
 
 export const CIV_LABEL: Record<Civilization, string> = {
@@ -70,13 +99,13 @@ export const ALL_CIVILIZATIONS: Civilization[] = [
 /** 操作の強調色 */
 export const ACCENT = {
   /** 選択中のカードの発光 */
-  select: '#4FB8F5',
-  /** ターン終了ボタン */
-  gold: '#FFD24A',
+  select: '#22D3EE',
+  /** 主要な操作(ターン終了など)。シアンと区別するため琥珀色にする。 */
+  gold: '#FFC53D',
   /** 攻撃ボタン */
-  navy: '#2B4A8B',
+  navy: '#0B3A55',
   /** 危険な操作(ダイレクトアタックなど) */
-  danger: '#E4572E',
+  danger: '#FF4D6D',
 } as const;
 
 /**
@@ -101,6 +130,34 @@ export const DURATION = {
 } as const;
 
 export const EASING = 'cubic-bezier(0.22,1,0.36,1)';
+
+/* ===== HUDの形 ===== */
+
+/**
+ * 角を斜めに切り落とした八角形。サイバーHUDらしい輪郭を作る。
+ * cut は切り落とす大きさ(px)。
+ */
+export function clipCorners(cut: number): string {
+  const c = `${cut}px`;
+  return (
+    `polygon(${c} 0, calc(100% - ${c}) 0, 100% ${c}, ` +
+    `100% calc(100% - ${c}), calc(100% - ${c}) 100%, ${c} 100%, 0 calc(100% - ${c}), 0 ${c})`
+  );
+}
+
+/**
+ * 左上と右下だけを切り落とした形。
+ * カードやボタンに向きを与えたいときに使う。
+ */
+export function clipDiagonal(cut: number): string {
+  const c = `${cut}px`;
+  return `polygon(${c} 0, 100% 0, 100% calc(100% - ${c}), calc(100% - ${c}) 100%, 0 100%, 0 ${c})`;
+}
+
+/** 発光する細い枠線(HUDパネルの基本) */
+export function neonEdge(color: string, width = 1, glow = 10): string {
+  return `inset 0 0 0 ${width}px ${color}, 0 0 ${glow}px rgba(34,211,238,0.18)`;
+}
 
 /** 長押しと判定するまでの時間 */
 export const LONG_PRESS_MS = 500;

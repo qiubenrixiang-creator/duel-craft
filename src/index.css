@@ -96,3 +96,166 @@ button,
     transition-duration: 0.01ms !important;
   }
 }
+
+/* ===================================================================
+   サイバーHUDの共通パーツ
+   色は src/ui/tokens.ts と合わせてある(変更時は両方直すこと)
+   =================================================================== */
+
+:root {
+  --void: #04070f;
+  --void-deep: #070d1a;
+  --neon: #22d3ee;
+  --neon-bright: #7df9ff;
+  --neon-dim: rgba(34, 211, 238, 0.55);
+  --neon-faint: rgba(34, 211, 238, 0.2);
+  --neon-ghost: rgba(34, 211, 238, 0.08);
+}
+
+html,
+body,
+#root {
+  background-color: var(--void);
+}
+
+body {
+  /* 数字を等幅で読ませたいので、欧文は等幅寄りのフォントを先に置く */
+  font-family: 'Hiragino Sans', 'Noto Sans JP', system-ui, sans-serif;
+}
+
+/** 数値(コスト・パワー・残り枚数)。桁が揺れないように等幅にする。 */
+.hud-num {
+  font-family: 'SF Mono', 'Roboto Mono', 'Consolas', ui-monospace, monospace;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+}
+
+/** ラベル文字。HUDらしく字間を広げて小さく置く。 */
+.hud-label {
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+/**
+ * 画面全体にかかる走査線。
+ * 濃くすると文字が読めなくなるので、ごく薄くしている。
+ */
+.hud-scanlines::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  pointer-events: none;
+  background: repeating-linear-gradient(
+    180deg,
+    rgba(0, 0, 0, 0) 0px,
+    rgba(0, 0, 0, 0) 2px,
+    rgba(0, 0, 0, 0.16) 3px,
+    rgba(0, 0, 0, 0) 4px
+  );
+  mix-blend-mode: multiply;
+  opacity: 0.55;
+}
+
+/**
+ * HUDの枠。角を斜めに落とし、シアンの細線で囲う。
+ * --cut で切り欠きの大きさ、--edge で線の色を差し替えられる。
+ */
+.hud-frame {
+  --cut: 8px;
+  --edge: var(--neon-faint);
+  position: relative;
+  clip-path: polygon(
+    var(--cut) 0,
+    100% 0,
+    100% calc(100% - var(--cut)),
+    calc(100% - var(--cut)) 100%,
+    0 100%,
+    0 var(--cut)
+  );
+  background: rgba(7, 16, 31, 0.5);
+  box-shadow: inset 0 0 0 1px var(--edge);
+}
+
+/** 強調されたHUD枠(ドロップ先として光らせるときなど) */
+.hud-frame.is-active {
+  --edge: var(--neon);
+  background: rgba(12, 42, 62, 0.55);
+}
+
+/**
+ * 四隅のブラケット(「⌐」のような角のかぎ括弧)。
+ * 枠線を全部引くより情報が締まって見える。
+ */
+.hud-brackets::before,
+.hud-brackets::after {
+  content: '';
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  pointer-events: none;
+  border-color: var(--neon-dim);
+  border-style: solid;
+}
+
+.hud-brackets::before {
+  top: 0;
+  right: 0;
+  border-width: 1px 1px 0 0;
+}
+
+.hud-brackets::after {
+  bottom: 0;
+  left: 0;
+  border-width: 0 0 1px 1px;
+}
+
+/** 選択中のカードなどに使う、ゆっくり明滅する発光 */
+@keyframes hud-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.55;
+  }
+}
+
+.hud-pulse {
+  animation: hud-pulse 1.6s ease-in-out infinite;
+}
+
+/** 背景で流れる走査ビーム */
+@keyframes hud-sweep {
+  from {
+    transform: translateY(-40%);
+  }
+  to {
+    transform: translateY(140vh);
+  }
+}
+
+/** 同心円HUDのゆっくりした回転 */
+@keyframes hud-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes hud-spin-reverse {
+  from {
+    transform: rotate(360deg);
+  }
+  to {
+    transform: rotate(0deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hud-pulse {
+    animation: none !important;
+  }
+}
